@@ -32,6 +32,10 @@ on:
 env:
   FLAVOR_PREFIX: ${{ inputs.flavor && format('{0}-', inputs.flavor) || '' }}
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-client:
     name: Build Client Artifacts
@@ -78,7 +82,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_ACCESS_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate base Dockerfile
         env:

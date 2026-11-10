@@ -1,9 +1,8 @@
 name: Build and Push to GHCR for Nvidia
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # Fork: 打 tag 时不再自动构建 nvidia 镜像,需要时手动触发。
+  workflow_dispatch:
 
 jobs:
   check-latest:

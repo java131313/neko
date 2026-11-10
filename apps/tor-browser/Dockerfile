@@ -6,8 +6,16 @@ FROM $BASE_IMAGE
 RUN set -eux; apt-get update; \
     apt-get install -y --no-install-recommends openbox curl xz-utils file libgtk-3-0 libdbus-glib-1-2; \
     #
-    # download TOR browser
-    DOWNLOAD_URI="$(curl -s -N https://aus1.torproject.org/torbrowser/update_3/release/download-linux-x86_64.json | grep -Po '"binary"\s*:\s*"\K[^"]+')"; \
+    # download TOR browser (for amd64 and arm64)
+    ARCH=$(dpkg --print-architecture); \
+    if [ "${ARCH}" = "amd64" ]; then \
+        DOWNLOAD_URI="$(curl -s -N https://aus1.torproject.org/torbrowser/update_3/release/download-linux-x86_64.json | grep -Po '"binary"\s*:\s*"\K[^"]+')"; \
+    elif [ "${ARCH}" = "arm64" ]; then \
+        DOWNLOAD_URI="$(curl -s -N https://aus1.torproject.org/torbrowser/update_3/release/download-linux-aarch64.json | grep -Po '"binary"\s*:\s*"\K[^"]+')"; \
+    else \
+        echo "Unsupported architecture: ${ARCH}"; \
+        exit 1; \
+    fi; \
 	echo "Downloading $DOWNLOAD_URI"; \
 	curl -sSL -o /tmp/tor.tar.xz "$DOWNLOAD_URI"; \
     tar -xvJf /tmp/tor.tar.xz -C /opt; \
