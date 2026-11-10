@@ -35,6 +35,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: chromium
+            platforms: linux/amd64,linux/arm64
           - name: tor-browser
             platforms: linux/amd64,linux/arm64
     with:
