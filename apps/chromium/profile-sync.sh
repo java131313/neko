@@ -66,6 +66,9 @@ save() {
         --exclude='GraphiteDawnCache' \
         --exclude='component_crx_cache' \
         --exclude='CertificateRevocation' \
+        --exclude='SingletonLock' \
+        --exclude='SingletonCookie' \
+        --exclude='SingletonSocket' \
         . 2>/dev/null | base64 -w0) || return 0
     [ -n "$b64" ] || return 0
     printf "INSERT INTO %s (id, data, updated_at) VALUES ('%s', '%s', now()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at;" \
@@ -83,6 +86,9 @@ restore() {
         if [ -s "$tgz" ]; then
             mkdir -p "$PROFILE_DIR"
             if tar -xzf "$tgz" -C "$PROFILE_DIR" 2>/dev/null; then
+                # stale inter-process locks from a previous container would
+                # block chromium startup ("profile appears to be in use")
+                rm -f "$PROFILE_DIR"/SingletonLock "$PROFILE_DIR"/SingletonCookie "$PROFILE_DIR"/SingletonSocket
                 log "restored profile snapshot from database"
             fi
         fi
