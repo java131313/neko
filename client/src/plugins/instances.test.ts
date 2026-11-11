@@ -25,7 +25,7 @@ const update = { enabled: true, root_dir: '/', user_download: true, user_upload:
 test('the slots are filled once, whatever the number of instances', () => {
   assert.deepEqual(
     useSlot('side.tab').map((x) => x.id),
-    ['chat', 'files'],
+    ['chat', 'shell', 'files'],
   )
   assert.deepEqual(
     useSlot('header.item').map((x) => x.id),

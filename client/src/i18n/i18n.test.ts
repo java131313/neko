@@ -20,7 +20,7 @@ fake('localStorage', {
 })
 const { i18n, t, initI18n, setLang, loader, langs, detectLang, htmlLang } = await import('./index.ts')
 
-const NS = ['common', 'chat', 'files'] as const
+const NS = ['common', 'chat', 'files', 'shell'] as const
 const json = (lang: string, ns: string) =>
   JSON.parse(readFileSync(new URL(`../locales/${lang}/${ns}.json`, import.meta.url), 'utf8')) as object
 const flat = (o: object, prefix = ''): Record<string, string> =>
@@ -36,14 +36,16 @@ const vars = (s: string) =>
     .join()
 
 test('start-up: ?lang= wins and is kept, the language and en are loaded, the others are not', async () => {
-  await initI18n(['chat', 'files'])
+  await initI18n(['chat', 'files', 'shell'])
   assert.equal(i18n.language, 'de')
   assert.equal(stored.get('lang'), 'de')
   assert.equal(document.documentElement.lang, 'de')
   for (const ns of NS) {
-    assert.ok(i18n.hasResourceBundle('de', ns), `de/${ns}`)
     assert.ok(i18n.hasResourceBundle('en', ns), `en/${ns}`)
+    if (ns === 'shell') continue // no de translation yet: this one falls back to en
+    assert.ok(i18n.hasResourceBundle('de', ns), `de/${ns}`)
   }
+  assert.equal(t('shell:tab'), 'Terminal') // the fallback for languages without shell.json
   for (const lang of langs) if (lang !== 'de' && lang !== 'en') assert.ok(!i18n.hasResourceBundle(lang, 'common'), lang)
 })
 
@@ -118,10 +120,13 @@ test('loader: reads exactly <lang>/<ns> from the glob map, nothing of the other 
   assert.equal(de.mock.calls.length, 1)
 })
 
-test('every language has the three files, en every key, the others all but the known gaps', () => {
+test('every language has the namespace files, en every key, the others all but the known gaps', () => {
   assert.deepEqual(readdirSync(new URL('../locales/', import.meta.url)).sort(), [...langs].sort())
   const en = Object.fromEntries(NS.map((ns) => [ns, flat(json('en', ns))]))
-  assert.equal(Object.keys(en.common).length + Object.keys(en.chat).length + Object.keys(en.files).length, 100)
+  assert.equal(
+    NS.reduce((n, ns) => n + Object.keys(en[ns]).length, 0),
+    102,
+  )
   // strings added since the translations: en only, until someone translates them
   const GAPS = [
     'controls.mic_on',
@@ -130,14 +135,22 @@ test('every language has the three files, en every key, the others all but the k
     'setting.links_in_app',
     'connection.replaced',
   ]
+  const SHELL_GAP = ['shell.tab', 'shell.disconnected'] // translated in cn; the others fall back to en
   for (const lang of langs) {
-    assert.deepEqual(readdirSync(new URL(`../locales/${lang}/`, import.meta.url)).sort(), [
-      'chat.json',
-      'common.json',
-      'files.json',
-    ])
+    // the shell tab is translated in en and cn; the other languages fall back to en for now
+    const translated = lang === 'en' || lang === 'cn'
+    assert.deepEqual(
+      readdirSync(new URL(`../locales/${lang}/`, import.meta.url)).sort(),
+      translated
+        ? ['chat.json', 'common.json', 'files.json', 'shell.json']
+        : ['chat.json', 'common.json', 'files.json'],
+    )
     const missing: string[] = []
     for (const ns of NS) {
+      if (ns === 'shell' && !translated) {
+        missing.push(...SHELL_GAP)
+        continue
+      }
       const mine = flat(json(lang, ns))
       for (const k of Object.keys(en[ns])) {
         if (!(k in mine)) missing.push(ns === 'common' ? k : `${ns}:${k}`)
@@ -145,7 +158,17 @@ test('every language has the three files, en every key, the others all but the k
       }
       for (const k of Object.keys(mine)) assert.ok(k in en[ns], `${lang} has ${ns}:${k}, en has not`)
     }
-    assert.deepEqual(missing, lang === 'en' ? [] : lang === 'sk' ? ['you', ...GAPS] : GAPS, lang)
+    assert.deepEqual(
+      missing,
+      lang === 'en'
+        ? []
+        : lang === 'sk'
+          ? ['you', ...GAPS, ...SHELL_GAP]
+          : lang === 'cn'
+            ? GAPS
+            : [...GAPS, ...SHELL_GAP],
+      lang,
+    )
   }
 })
 

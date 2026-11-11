@@ -23,6 +23,7 @@ const manifest = (id: string, ns: string): Plugin => ({
   init: () => inits.push(id),
 })
 vi.mock('./chat', () => ({ chat: manifest('chat', 'chat') }))
+vi.mock('./webshell', () => ({ webshell: manifest('webshell', 'shell') }))
 vi.mock('./filetransfer', () => ({ filetransfer: manifest('filetransfer', 'files') }))
 
 // a registry as at start-up
@@ -42,6 +43,7 @@ test('initPlugins fills the slots in registry order and runs each init', async (
     plugins.map((p) => [p.id, p.ns]),
     [
       ['chat', 'chat'],
+      ['webshell', 'shell'],
       ['filetransfer', 'files'],
     ],
   )
@@ -49,17 +51,17 @@ test('initPlugins fills the slots in registry order and runs each init', async (
   initPlugins(neko)
   assert.deepEqual(
     useSlot('side.tab').map((x) => x.label),
-    ['chat:tab', 'files:tab'],
+    ['chat:tab', 'shell:tab', 'files:tab'],
   )
   assert.deepEqual(
     useSlot('header.item').map((x) => x.id),
-    ['chat-top', 'filetransfer-top'],
+    ['chat-top', 'webshell-top', 'filetransfer-top'],
   )
   assert.deepEqual(
     useSlot('member.menu').map((x) => x.id),
-    ['chat-menu', 'filetransfer-menu'],
+    ['chat-menu', 'webshell-menu', 'filetransfer-menu'],
   )
-  assert.deepEqual(inits, ['chat', 'filetransfer'])
+  assert.deepEqual(inits, ['chat', 'webshell', 'filetransfer'])
 })
 
 test('a server event reaches the plugin of its prefix only; an unknown prefix reaches nobody', async () => {
@@ -97,17 +99,17 @@ test('removing a plugin from the array removes its slot entries and its event ha
   initPlugins(neko)
   assert.deepEqual(
     useSlot('side.tab').map((x) => x.label),
-    ['files:tab'],
+    ['shell:tab', 'files:tab'],
   )
   assert.deepEqual(
     useSlot('header.item').map((x) => x.id),
-    ['filetransfer-top'],
+    ['webshell-top', 'filetransfer-top'],
   )
   assert.deepEqual(
     useSlot('member.menu').map((x) => x.id),
-    ['filetransfer-menu'],
+    ['webshell-menu', 'filetransfer-menu'],
   )
-  assert.deepEqual(inits, ['filetransfer'])
+  assert.deepEqual(inits, ['webshell', 'filetransfer'])
   emit('chat/message', message)
   emit('filetransfer/update', update)
   assert.deepEqual(received, { filetransfer: [['filetransfer/update', update]] })
@@ -119,6 +121,6 @@ test('registerSlot: a contribution registered by hand goes after the manifests',
   registerSlot('header.item', { id: 'extra', component: Nothing })
   assert.deepEqual(
     useSlot('header.item').map((x) => x.id),
-    ['chat-top', 'filetransfer-top', 'extra'],
+    ['chat-top', 'webshell-top', 'filetransfer-top', 'extra'],
   )
 })
