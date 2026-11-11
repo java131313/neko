@@ -7,7 +7,7 @@ COPY ./widevinecdm.sh /widevine.sh
 # install neko chromium
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends chromium chromium-common chromium-sandbox openbox postgresql-client; \
+    apt-get install -y --no-install-recommends chromium chromium-common chromium-sandbox openbox postgresql-client sqlite3; \
     #
     # install widevine module (only for amd64)
     CHROMIUM_DIR="/usr/lib/chromium"; \
