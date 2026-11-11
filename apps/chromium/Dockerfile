@@ -7,7 +7,7 @@ COPY ./widevinecdm.sh /widevine.sh
 # install neko chromium
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends chromium chromium-common chromium-sandbox openbox; \
+    apt-get install -y --no-install-recommends chromium chromium-common chromium-sandbox openbox postgresql-client; \
     #
     # install widevine module (only for amd64)
     CHROMIUM_DIR="/usr/lib/chromium"; \
@@ -30,6 +30,8 @@ RUN set -eux; \
 
 #
 # copy configuation files
+COPY profile-sync.sh /usr/bin/neko-profile-sync
+RUN chmod +x /usr/bin/neko-profile-sync
 COPY supervisord.conf /etc/neko/supervisord/chromium.conf
 COPY --chown=neko preferences.json /home/neko/.config/chromium/Default/Preferences
 COPY policies.json /etc/chromium/policies/managed/policies.json
