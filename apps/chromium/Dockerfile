@@ -29,6 +29,19 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
 #
+# install playwright (python) to automate the in-container chromium over CDP
+# (drives the system chromium via --remote-debugging-port, no bundled browser needed)
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends python3-pip; \
+    pip install --break-system-packages --no-cache-dir playwright==1.65.0; \
+    playwright --version; \
+    #
+    # clean up
+    apt-get clean -y; \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+
+#
 # copy configuation files
 COPY profile-sync.sh /usr/bin/neko-profile-sync
 RUN chmod +x /usr/bin/neko-profile-sync
