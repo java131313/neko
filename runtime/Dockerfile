@@ -13,10 +13,16 @@ COPY widevine-installer/ /widevine/
 
 #
 # install dependencies
+# Optional Debian mirror override (--build-arg DEBIAN_MIRROR=mirrors.ustc.edu.cn)
+# for networks where deb.debian.org throttles large packages.
+ARG DEBIAN_MIRROR=""
 ENV DEBIAN_FRONTEND=noninteractive
 RUN set -eux; \
+    if [ -n "$DEBIAN_MIRROR" ]; then \
+        sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources; \
+    fi; \
     apt-get update; \
-    apt-get install -y --no-install-recommends \
+    apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=30 install -y --no-install-recommends \
         wget ca-certificates supervisor \
         pulseaudio dbus-x11 xserver-xorg-video-dummy \
         libcairo2 libxcb1 libxrandr2 libxv1 libopus0 libvpx9 libx264-164 libvo-aacenc0 librtmp1 libxcvt0 \
@@ -46,24 +52,25 @@ RUN set -eux; \
     #
     # make directories for neko
     mkdir -p /etc/neko /var/www /var/log/neko \
+        /run/neko \
         /tmp/runtime-$USERNAME \
         /home/$USERNAME/.config/pulse  \
         /home/$USERNAME/.local/share/xorg; \
     chmod 1777 /var/log/neko; \
     chmod 0700 /tmp/runtime-$USERNAME; \
-    chown $USERNAME /var/log/neko/ /tmp/runtime-$USERNAME; \
+    chown $USERNAME /var/log/neko/ /tmp/runtime-$USERNAME /run/neko; \
     chown -R $USERNAME:$USERNAME /home/$USERNAME; \
     #
     # install widevine for arm64
     ARCH=$(dpkg --print-architecture); \
     if [ "${ARCH}" = "arm64" ]; then \
-        apt-get install -y --no-install-recommends squashfs-tools; \
+        apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=30 install -y --no-install-recommends squashfs-tools; \
         chmod +x /widevine/widevine*; \
         printf "\n\n" | /widevine/widevine-installer; \
         apt-get --purge autoremove -y squashfs-tools; \
     fi; \
     # install fonts
-    apt-get install -y --no-install-recommends \
+    apt-get -o Acquire::Retries=8 -o Acquire::http::Timeout=30 install -y --no-install-recommends \
         # Emojis
         fonts-noto-color-emoji \
         # Chinese fonts

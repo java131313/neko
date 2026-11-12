@@ -28,12 +28,18 @@ type CaptureManagerCtx struct {
 	// sources
 	webcam     *StreamSrcManagerCtx
 	microphone *StreamSrcManagerCtx
+
+	// assembled pipeline factories, exposed to the external dataplane via
+	// DataplanePipelines(); stored so expressions are re-evaluated then
+	videoPipelines map[string]func() (string, error)
+	audioPipeline  func() (string, error)
 }
 
 func New(desktop types.DesktopManager, config *config.Capture) *CaptureManagerCtx {
 	logger := log.With().Str("module", "capture").Logger()
 
 	videos := map[string]*StreamSinkManagerCtx{}
+	videoPipelines := map[string]func() (string, error){}
 	for video_id, cnf := range config.VideoPipelines {
 		pipelineConf := cnf
 
@@ -70,6 +76,23 @@ func New(desktop types.DesktopManager, config *config.Capture) *CaptureManagerCt
 
 		// append to videos
 		videos[video_id] = streamSinkNew(config.VideoCodec, createPipeline, video_id)
+		videoPipelines[video_id] = createPipeline
+	}
+
+	audioPipeline := func() (string, error) {
+		if config.AudioPipeline != "" {
+			// replace {device} with valid device
+			return strings.Replace(config.AudioPipeline, "{device}", config.AudioDevice, 1), nil
+		}
+
+		return fmt.Sprintf(
+			"pulsesrc device=%s "+
+				"! audio/x-raw,channels=2 "+
+				"! audioconvert "+
+				"! queue max-size-buffers=5 leaky=downstream "+
+				"! %s "+
+				"! appsink name=appsink", config.AudioDevice, config.AudioCodec.Pipeline,
+		), nil
 	}
 
 	return &CaptureManagerCtx{
@@ -125,22 +148,12 @@ func New(desktop types.DesktopManager, config *config.Capture) *CaptureManagerCt
 			)
 		}()),
 
-		audio: streamSinkNew(config.AudioCodec, func() (string, error) {
-			if config.AudioPipeline != "" {
-				// replace {device} with valid device
-				return strings.Replace(config.AudioPipeline, "{device}", config.AudioDevice, 1), nil
-			}
-
-			return fmt.Sprintf(
-				"pulsesrc device=%s "+
-					"! audio/x-raw,channels=2 "+
-					"! audioconvert "+
-					"! queue max-size-buffers=5 leaky=downstream "+
-					"! %s "+
-					"! appsink name=appsink", config.AudioDevice, config.AudioCodec.Pipeline,
-			), nil
-		}, "audio"),
+		audio: streamSinkNew(config.AudioCodec, audioPipeline, "audio"),
 		video: streamSelectorNew(config.VideoCodec, videos, config.VideoIDs),
+
+		// assembled pipeline factories for the external dataplane
+		videoPipelines: videoPipelines,
+		audioPipeline:  audioPipeline,
 
 		// sources
 		webcam: streamSrcNew(config.WebcamEnabled, map[string]string{
@@ -257,8 +270,33 @@ func (manager *CaptureManagerCtx) Screencast() types.ScreencastManager {
 	return manager.screencast
 }
 
-func (manager *CaptureManagerCtx) Audio() types.EncodedStream {
-	return manager.audio
+func (manager *CaptureManagerCtx) Audio() types.EncodedStream {	return manager.audio
+}
+
+// DataplanePipelines implements types.CaptureManager.
+func (manager *CaptureManagerCtx) DataplanePipelines() (types.DataplaneCapture, error) {
+	videos := make(map[string]string, len(manager.videoPipelines))
+	for id, factory := range manager.videoPipelines {
+		pipeline, err := factory()
+		if err != nil {
+			return types.DataplaneCapture{}, err
+		}
+		videos[id] = pipeline
+	}
+
+	audio, err := manager.audioPipeline()
+	if err != nil {
+		return types.DataplaneCapture{}, err
+	}
+
+	return types.DataplaneCapture{
+		Videos:      videos,
+		Audio:       audio,
+		VideoCodec:  manager.config.VideoCodec.Name,
+		AudioCodec:  manager.config.AudioCodec.Name,
+		Display:     manager.config.Display,
+		AudioDevice: manager.config.AudioDevice,
+	}, nil
 }
 
 func (manager *CaptureManagerCtx) Video() types.EncodedStreamSelector {

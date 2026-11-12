@@ -1,0 +1,5 @@
+.git
+**/node_modules
+dataplane/target
+server/bin
+**/__pycache__

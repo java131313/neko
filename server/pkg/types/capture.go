@@ -133,6 +133,18 @@ type EncodedMediaSource interface {
 	Video() EncodedStreamSelector
 }
 
+// Assembled GStreamer pipelines for the external media dataplane
+// (Rust neko-dataplane). All placeholders are already substituted; each
+// pipeline contains `appsink name=appsink`.
+type DataplaneCapture struct {
+	Videos      map[string]string // video stream id -> pipeline
+	Audio       string
+	VideoCodec  string
+	AudioCodec  string
+	Display     string
+	AudioDevice string
+}
+
 type StreamSrcManager interface {
 	Codec() codec.RTPCodec
 
@@ -154,6 +166,10 @@ type CaptureManager interface {
 
 	Webcam() StreamSrcManager
 	Microphone() StreamSrcManager
+
+	// DataplanePipelines returns the assembled GStreamer pipelines for
+	// the external media dataplane. Only used in dataplane mode.
+	DataplanePipelines() (DataplaneCapture, error)
 }
 
 type VideoConfig struct {
