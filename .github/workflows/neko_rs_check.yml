@@ -34,4 +34,4 @@ jobs:
 
       - name: cargo test (protocol units)
         working-directory: neko-rs
-        run: cargo test --lib
+        run: cargo test --bin neko-rs
