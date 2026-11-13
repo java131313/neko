@@ -64,6 +64,16 @@ pub async fn handle(socket: WebSocket, state: State, token: Option<String>) {
         payload: serde_json::to_value(&init).unwrap_or_default(),
     };
     state.send_to(&session_id, &init_env).await;
+    // chat plugin init (Go: plugins/chat sends this on every connect)
+    state
+        .send_to(
+            &session_id,
+            &Envelope {
+                event: "chat/init".to_owned(),
+                payload: serde_json::json!({ "enabled": true }),
+            },
+        )
+        .await;
 
     let heartbeat_secs = state
         .settings()
@@ -193,6 +203,22 @@ async fn dispatch(state: &State, session_id: &str, env: Envelope) {
         ev::CLIPBOARD_SET => {
             let Some(text) = env.payload["text"].as_str() else { return };
             state.input_clipboard_set(session_id, text).await;
+        }
+
+        // ---- chat plugin (minimal port of internal/plugins/chat) ----
+        "chat/message" => {
+            let Some(text) = env.payload["text"].as_str() else { return };
+            if text.is_empty() {
+                return;
+            }
+            state.broadcast(&Envelope {
+                event: "chat/message".to_owned(),
+                payload: serde_json::json!({
+                    "id": session_id,
+                    "created": crate::room::now_rfc3339(),
+                    "content": { "text": text },
+                }),
+            });
         }
 
         // ---- signalling (phase C) ----

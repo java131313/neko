@@ -88,7 +88,7 @@ RUN set -eux; \
         gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
         gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
         gstreamer1.0-pulseaudio \
-        chromium coturn \
+        chromium coturn postgresql-client sqlite3 \
         fonts-noto-color-emoji fonts-wqy-zenhei fonts-wqy-microhei; \
     groupadd --gid 1000 neko; \
     useradd --uid 1000 --gid neko --shell /bin/bash --create-home neko; \
@@ -112,6 +112,8 @@ COPY runtime/xorg.conf /etc/neko/xorg.conf
 COPY neko-rs/supervisord.chromium.conf /etc/neko/supervisord/chromium.conf
 COPY neko-rs/supervisord.coturn.conf /etc/neko/supervisord/coturn.conf
 COPY neko-rs/turnserver.conf /etc/neko/turnserver.conf
+COPY apps/chromium/profile-sync.sh /usr/bin/neko-profile-sync
+RUN chmod +x /usr/bin/neko-profile-sync
 COPY apps/chromium/openbox.xml /etc/neko/openbox.xml
 COPY --chown=neko:neko runtime/.Xresources /home/neko/.Xresources
 
@@ -125,7 +127,12 @@ ENV PULSE_SERVER=unix:/tmp/pulseaudio.socket
 ENV XDG_RUNTIME_DIR=/tmp/runtime-neko
 ENV NEKO_SERVER_BIND=:8080
 ENV NEKO_CAPTURE_VIDEO_DISPLAY=:99.0
+# capture chromium's audio: the monitor of default.pa's audio_output sink
+# (explicit beats relying on pulse's default-source selection)
+ENV NEKO_CAPTURE_AUDIO_DEVICE=audio_output.monitor
 ENV NEKO_WEBRTC_ICELITE=1
+# profile-sync.sh follows this log for online users (session_id markers)
+ENV NEKO_SERVER_LOG=/var/log/neko/neko-rs.log
 
 EXPOSE 8080 7681
 
