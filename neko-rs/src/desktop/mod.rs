@@ -211,8 +211,14 @@ fn load_keymap(conn: &RustConnection) -> Result<(u8, Vec<Vec<u32>>)> {
 fn find_xtest_keyboard(conn: &RustConnection) -> Option<u8> {
     use x11rb::protocol::xinput::ConnectionExt as _;
     let reply = conn.xinput_list_input_devices().ok()?.reply().ok()?;
-    for device in &reply.devices {
-        if String::from_utf8_lossy(&device.name).contains("XTEST keyboard") {
+    // names is a parallel array to devices
+    for (i, device) in reply.devices.iter().enumerate() {
+        let name = reply
+            .names
+            .get(i)
+            .map(|s| String::from_utf8_lossy(&s.0).into_owned())
+            .unwrap_or_default();
+        if name.contains("XTEST keyboard") {
             return Some(device.device_id);
         }
     }
