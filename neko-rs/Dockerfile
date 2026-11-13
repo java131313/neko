@@ -60,6 +60,17 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp /src/target/release/neko-rs /usr/local/bin/neko-rs && \
     cp /src/target/release/neko-webshell /usr/local/bin/neko-webshell
 
+FROM node:24-trixie-slim AS client
+
+WORKDIR /src
+
+# the client resolves @m1k1o/neko straight from ./core/src (vite alias +
+# tsconfig paths), so one npm ci + vite build produces /var/www content
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
+COPY client/ ./
+RUN npm run build
+
 FROM debian:trixie-slim
 
 ARG DEBIAN_MIRROR=""
@@ -106,6 +117,7 @@ COPY --chown=neko:neko runtime/.Xresources /home/neko/.Xresources
 
 COPY --from=builder /usr/local/bin/neko-rs /usr/bin/neko-rs
 COPY --from=builder /usr/local/bin/neko-webshell /usr/bin/neko-webshell
+COPY --from=client /src/dist /var/www
 
 ENV USER=neko
 ENV DISPLAY=:99.0
