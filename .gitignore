@@ -49,3 +49,4 @@ runtime/icon-theme/*
 
 # Rust dataplane
 dataplane/target/
+neko-rs/target/
