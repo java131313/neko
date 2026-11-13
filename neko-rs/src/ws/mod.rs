@@ -190,6 +190,10 @@ async fn dispatch(state: &State, session_id: &str, env: Envelope) {
         ev::CONTROL_PASTE => {
             state.input_paste(session_id).await;
         }
+        ev::CLIPBOARD_SET => {
+            let Some(text) = env.payload["text"].as_str() else { return };
+            state.input_clipboard_set(session_id, text).await;
+        }
 
         // ---- signalling (phase C) ----
         ev::SIGNAL_REQUEST => {

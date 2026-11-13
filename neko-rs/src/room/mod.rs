@@ -462,6 +462,31 @@ impl State {
         let _ = desktop.key(0x0076, false);
         let _ = desktop.key(0xffe3, false);
     }
+
+    /// clipboard/set: write the X CLIPBOARD and confirm with the
+    /// clipboard/updated broadcast the client's preparePaste waits for.
+    /// This is the path Chinese/CJK text takes into the remote desktop
+    /// (the client's paste box sends the composed text here, then
+    /// control/paste injects Ctrl+V).
+    pub async fn input_clipboard_set(&self, session_id: &str, text: &str) {
+        let Some(session) = self.session_by_id(session_id).await else {
+            return;
+        };
+        if !session.profile.can_access_clipboard {
+            return;
+        }
+        if let Some(desktop) = &self.inner.desktop {
+            let _ = desktop.lock().await.set_clipboard(text);
+        }
+        self.broadcast(&messages::Envelope {
+            event: messages::server_events::CLIPBOARD_UPDATED.to_owned(),
+            payload: serde_json::to_value(messages::ClipboardUpdated {
+                id: Some(session_id.to_owned()),
+                text: text.to_owned(),
+            })
+            .unwrap_or_default(),
+        });
+    }
 }
 
 /// Default profile for the multiuser provider.

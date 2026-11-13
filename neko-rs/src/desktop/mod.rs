@@ -103,6 +103,29 @@ impl Desktop {
         Ok((reply.root_x as i32, reply.root_y as i32))
     }
 
+    /// Write text to the X CLIPBOARD selection. xclip (shipped in the
+    /// image) forks and serves the selection until replaced; a later
+    /// native xfixes implementation can replace this.
+    pub fn set_clipboard(&self, text: &str) -> Result<()> {
+        use std::io::Write as _;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new("xclip")
+            .args(["-selection", "clipboard"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .context("spawn xclip")?;
+        child
+            .stdin
+            .as_mut()
+            .context("xclip stdin")?
+            .write_all(text.as_bytes())
+            .context("write clipboard text")?;
+        let _ = child.wait();
+        Ok(())
+    }
+
     /// Buttons 4/5 = vertical wheel, 6/7 = horizontal (XScroll in xorg.c);
     /// one click per unit of delta. `control_key` holds Control around the
     /// clicks (XSetKeyboardModifier equivalent).

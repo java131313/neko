@@ -210,8 +210,13 @@ async fn handle_connection(stream: tokio::net::TcpStream, peer: SocketAddr, shel
                         }
                     }
                     Some(Ok(Message::Text(text))) => {
+                        // xterm.js sends keystrokes as TEXT frames; only a
+                        // valid resize JSON is control, everything else is
+                        // raw terminal input
                         if let Some((cols, rows)) = parse_resize(&text) {
                             set_winsize(master_raw, cols, rows);
+                        } else if writer_master.write_all(text.as_bytes()).is_err() {
+                            break 'pump;
                         }
                     }
                     Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => {}
