@@ -161,6 +161,36 @@ async fn dispatch(state: &State, session_id: &str, env: Envelope) {
         ev::CONTROL_REQUEST => state.control_request(session_id).await,
         ev::CONTROL_RELEASE => state.control_release(session_id).await,
 
+        // ---- input over the websocket fallback (phase D) ----
+        ev::CONTROL_MOVE => {
+            let Some(x) = env.payload["x"].as_i64() else { return };
+            let Some(y) = env.payload["y"].as_i64() else { return };
+            state.input_move(session_id, x as i32, y as i32).await;
+        }
+        ev::CONTROL_SCROLL => {
+            let Ok(scroll) = serde_json::from_value::<messages::ScrollEvent>(env.payload) else {
+                return;
+            };
+            state
+                .input_scroll(session_id, scroll.delta_x, scroll.delta_y, scroll.control_key)
+                .await;
+        }
+        ev::CONTROL_KEY_DOWN | ev::CONTROL_KEY_UP => {
+            let Some(keysym) = env.payload["keysym"].as_u64() else { return };
+            state
+                .input_key(session_id, keysym as u32, env.event == ev::CONTROL_KEY_DOWN)
+                .await;
+        }
+        ev::CONTROL_BUTTON_DOWN | ev::CONTROL_BUTTON_UP => {
+            let Some(code) = env.payload["code"].as_u64() else { return };
+            state
+                .input_button(session_id, code as u32, env.event == ev::CONTROL_BUTTON_DOWN)
+                .await;
+        }
+        ev::CONTROL_PASTE => {
+            state.input_paste(session_id).await;
+        }
+
         // ---- signalling (phase C) ----
         ev::SIGNAL_REQUEST => {
             let can_watch = state
@@ -228,9 +258,26 @@ async fn build_init(state: &State, session_id: &str) -> messages::InitPayload {
     let settings = state.settings().await;
     let sessions = state.sessions_snapshot().await;
     let control_host = state.control_host().await;
-    let screen_size = *state.inner.screen_size.read().await;
 
-    // TODO(phase:capture): real screen size from X11; TODO(phase:webrtc): videos ids
+    // real screen size from X11 when the desktop is up; config fallback
+    let screen_size = match &state.inner.desktop {
+        Some(desktop) => {
+            let fallback = *state.inner.screen_size.read().await;
+            desktop
+                .lock()
+                .await
+                .screen_size()
+                .map(|(width, height, rate)| messages::ScreenSize {
+                    width,
+                    height,
+                    rate,
+                })
+                .unwrap_or(fallback)
+        }
+        None => *state.inner.screen_size.read().await,
+    };
+
+    // TODO(phase:webrtc): videos ids from capture
     messages::InitPayload {
         session_id: session_id.to_owned(),
         control_host,

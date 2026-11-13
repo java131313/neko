@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::{broadcast, mpsc, RwLock};
-use tracing::info;
+use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
+use tracing::{info, warn};
 
 use crate::config::Config;
 use crate::messages::{self, ControlHost, Envelope, MemberProfile, ScreenSize, Session, SessionState, Settings};
@@ -37,6 +37,8 @@ pub struct Inner {
     pub bus: broadcast::Sender<Envelope>,
     /// webrtc peer manager (phase C)
     pub webrtc: crate::webrtc::Manager,
+    /// X11 desktop control; None when the X display is unreachable
+    pub desktop: Option<Arc<Mutex<crate::desktop::Desktop>>>,
 }
 
 pub struct SessionEntry {
@@ -80,6 +82,16 @@ impl State {
         };
         let (bus, _) = broadcast::channel(BUS_CAP);
         let webrtc = crate::webrtc::Manager::new(config.clone(), webrtc_events);
+        let desktop = match crate::desktop::Desktop::new(&config.capture.display) {
+            Ok(desktop) => {
+                info!(display = %config.capture.display, "desktop connected");
+                Some(Arc::new(Mutex::new(desktop)))
+            }
+            Err(err) => {
+                warn!(?err, display = %config.capture.display, "desktop unavailable");
+                None
+            }
+        };
         State {
             inner: Arc::new(Inner {
                 config,
@@ -90,6 +102,7 @@ impl State {
                 screen_size: RwLock::new(screen_size),
                 bus,
                 webrtc,
+                desktop,
             }),
         }
     }
@@ -379,6 +392,75 @@ impl State {
 
     pub async fn settings(&self) -> Settings {
         self.inner.settings.read().await.clone()
+    }
+
+    // ---- input (phase D) ----
+
+    /// Host (or implicit host) and not blocked by locked_controls.
+    pub async fn can_control(&self, session_id: &str) -> bool {
+        let settings = self.inner.settings.read().await.clone();
+        let Some(session) = self.session_by_id(session_id).await else {
+            return false;
+        };
+        if settings.locked_controls && !session.profile.is_admin {
+            return false;
+        }
+        if self.host_is(session_id).await {
+            return true;
+        }
+        settings.implicit_hosting && session.profile.can_host
+    }
+
+    /// Absolute cursor move — host only (the embedded semantics; non-host
+    /// moves become inactive-cursor updates in phase E).
+    pub async fn input_move(&self, session_id: &str, x: i32, y: i32) {
+        if !self.can_control(session_id).await {
+            return;
+        }
+        if let Some(desktop) = &self.inner.desktop {
+            let _ = desktop.lock().await.move_cursor(x, y);
+        }
+    }
+
+    pub async fn input_scroll(&self, session_id: &str, delta_x: i32, delta_y: i32, control_key: bool) {
+        if !self.can_control(session_id).await {
+            return;
+        }
+        if let Some(desktop) = &self.inner.desktop {
+            let _ = desktop.lock().await.scroll(delta_x, delta_y, control_key);
+        }
+    }
+
+    pub async fn input_key(&self, session_id: &str, keysym: u32, down: bool) {
+        if !self.can_control(session_id).await {
+            return;
+        }
+        if let Some(desktop) = &self.inner.desktop {
+            let _ = desktop.lock().await.key(keysym, down);
+        }
+    }
+
+    pub async fn input_button(&self, session_id: &str, code: u32, down: bool) {
+        if !self.can_control(session_id).await {
+            return;
+        }
+        if let Some(desktop) = &self.inner.desktop {
+            let _ = desktop.lock().await.button(code, down);
+        }
+    }
+
+    /// control/paste: clipboard content lands in phase E (xfixes); the
+    /// keystroke injection already works against the current X clipboard.
+    pub async fn input_paste(&self, session_id: &str) {
+        if !self.can_control(session_id).await {
+            return;
+        }
+        let Some(desktop) = &self.inner.desktop else { return };
+        let mut desktop = desktop.lock().await;
+        let _ = desktop.key(0xffe3, true); // Control_L keysym
+        let _ = desktop.key(0x0076, true); // v
+        let _ = desktop.key(0x0076, false);
+        let _ = desktop.key(0xffe3, false);
     }
 }
 

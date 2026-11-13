@@ -199,8 +199,7 @@ fn debug_log(state: &str) {
     tracing::debug!(%state, "peer connection state");
 }
 
-/// Data channel input: decode and act. Phase C replies to pings; the
-/// desktop routing (move/scroll/key/button/touch) is phase D.
+/// Data channel input: decode and dispatch to the desktop (phase D).
 async fn handle_data_message(state: &State, session_id: &str, data: &[u8]) {
     use crate::payload::{self, ClientMessage, Decoded, ServerMessage};
     match payload::decode_client(data) {
@@ -223,8 +222,40 @@ async fn handle_data_message(state: &State, session_id: &str, data: &[u8]) {
                 peer.send_data(&pong.encode()).await;
             }
         }
-        Ok(decoded) => {
-            tracing::debug!(?decoded, "input event (phase D routes to desktop)");
+        Ok(Decoded::Msg(ClientMessage::Move { x, y })) => {
+            state.input_move(session_id, x as i32, y as i32).await;
+        }
+        Ok(Decoded::Scroll(scroll)) => {
+            use crate::payload::ScrollPayload;
+            match scroll {
+                ScrollPayload::Legacy { x, y } => {
+                    state.input_scroll(session_id, x as i32, y as i32, false).await;
+                }
+                ScrollPayload::Full {
+                    delta_x,
+                    delta_y,
+                    control_key,
+                } => {
+                    state
+                        .input_scroll(session_id, delta_x as i32, delta_y as i32, control_key)
+                        .await;
+                }
+            }
+        }
+        Ok(Decoded::Msg(ClientMessage::KeyDown { key })) => {
+            state.input_key(session_id, key, true).await;
+        }
+        Ok(Decoded::Msg(ClientMessage::KeyUp { key })) => {
+            state.input_key(session_id, key, false).await;
+        }
+        Ok(Decoded::Msg(ClientMessage::ButtonDown { key })) => {
+            state.input_button(session_id, key, true).await;
+        }
+        Ok(Decoded::Msg(ClientMessage::ButtonUp { key })) => {
+            state.input_button(session_id, key, false).await;
+        }
+        Ok(other) => {
+            tracing::debug!(?other, "touch/other input (phase E)");
         }
         Err(err) => {
             tracing::debug!(?err, "invalid data channel message");

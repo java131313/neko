@@ -269,6 +269,7 @@ pub mod client_events {
     pub const HEARTBEAT: &str = "client/heartbeat";
     pub const CONTROL_REQUEST: &str = "control/request";
     pub const CONTROL_RELEASE: &str = "control/release";
+    pub const CONTROL_MOVE: &str = "control/move";
     pub const CONTROL_SCROLL: &str = "control/scroll";
     pub const CONTROL_KEY_DOWN: &str = "control/keydown";
     pub const CONTROL_KEY_UP: &str = "control/keyup";
