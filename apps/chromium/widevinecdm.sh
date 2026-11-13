@@ -31,11 +31,30 @@ curl -L -o widevinecdm.crx "$URL"
 
 # Install go-crx3
 echo "Fetching latest go-crx3 version..."
-VERSION=$(curl -s https://api.github.com/repos/m1k1o/go-crx3/releases/latest | grep 'tag_name' | cut -d '"' -f4)
+# Pinned fallback: the unauthenticated GitHub API is rate-limited on shared
+# CI runners and then returns an empty tag, which produced a garbage
+# download URL ("releases/download//") and a tar failure (seen 2026-11-13).
+VERSION=""
+for attempt in 1 2 3 4 5; do
+    VERSION=$(curl -sf https://api.github.com/repos/m1k1o/go-crx3/releases/latest | grep 'tag_name' | cut -d '"' -f4 || true)
+    if [ -n "$VERSION" ]; then
+        break
+    fi
+    echo "go-crx3 version lookup failed (attempt $attempt), retrying..."
+    sleep $((attempt * 5))
+done
+if [ -z "$VERSION" ]; then
+    VERSION="v1.6.1"  # fallback pin: latest as of 2026-11
+    echo "GitHub API unreachable, falling back to pinned $VERSION"
+fi
 ARTIFACT="go-crx3_${VERSION#v}_linux_amd64.tar.gz"
 URL="https://github.com/m1k1o/go-crx3/releases/download/${VERSION}/${ARTIFACT}"
 echo "Downloading $URL"
 curl -L -o "$ARTIFACT" "$URL"
+if ! gzip -t "$ARTIFACT" 2>/dev/null; then
+    echo "downloaded $ARTIFACT is not a gzip archive (bad tag or blocked release?)" >&2
+    exit 1
+fi
 tar -xzf "$ARTIFACT"
 
 # Unpack with go-crx3
