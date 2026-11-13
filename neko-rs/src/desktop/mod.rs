@@ -210,7 +210,7 @@ fn load_keymap(conn: &RustConnection) -> Result<(u8, Vec<Vec<u32>>)> {
 /// keys. Falls back to 0 (core protocol) when XInput is unavailable.
 fn find_xtest_keyboard(conn: &RustConnection) -> Option<u8> {
     use x11rb::protocol::xinput::ConnectionExt as _;
-    let reply = conn.list_input_devices().ok()?.reply().ok()?;
+    let reply = conn.xinput_list_input_devices().ok()?.reply().ok()?;
     for device in &reply.devices {
         if String::from_utf8_lossy(&device.name).contains("XTEST keyboard") {
             return Some(device.device_id);
