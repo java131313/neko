@@ -66,20 +66,19 @@ impl Service {
             return Ok(existing);
         }
 
+        // build OUTSIDE the std lock: gst set_state talks to X and can
+        // block; the guard is !Send and must not cross the awaits
+        let video = config.capture.video_pipeline.clone();
+        let audio = config.capture.audio_pipeline.clone();
+        let source = tokio::task::spawn_blocking(move || MediaSource::start(&video, &audio))
+            .await
+            .map_err(|err| Status::internal(format!("media start task: {err}")))?
+            .map_err(|err| Status::internal(format!("start media source: {err}")))?;
+
         let mut media = self.media.write().unwrap();
         if media.is_none() {
-            let video = config.capture.video_pipeline.clone();
-            let audio = config.capture.audio_pipeline.clone();
-            // gst set_state talks to X and can block indefinitely; keep it
-            // off the tonic/tokio worker threads
-            let source = tokio::task::spawn_blocking(move || MediaSource::start(&video, &audio))
-                .await
-                .map_err(|err| Status::internal(format!("media start task: {err}")))?
-                .map_err(|err| Status::internal(format!("start media source: {err}")))?;
-
             *media = source.clone();
         }
-
         Ok(media.clone())
     }
 
