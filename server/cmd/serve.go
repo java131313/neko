@@ -17,9 +17,7 @@ import (
 	"github.com/m1k1o/neko/server/internal/plugins"
 	"github.com/m1k1o/neko/server/internal/session"
 	"github.com/m1k1o/neko/server/internal/webrtc"
-	"github.com/m1k1o/neko/server/internal/webrtcp"
 	"github.com/m1k1o/neko/server/internal/websocket"
-	"github.com/m1k1o/neko/server/pkg/types"
 )
 
 func init() {
@@ -56,7 +54,7 @@ type serve struct {
 	managers struct {
 		desktop   *desktop.DesktopManagerCtx
 		capture   *capture.CaptureManagerCtx
-		webRTC    types.WebRTCManager
+		webRTC    *webrtc.WebRTCManagerCtx
 		member    *member.MemberManagerCtx
 		session   *session.SessionManagerCtx
 		webSocket *websocket.WebSocketManagerCtx
@@ -155,21 +153,11 @@ func (c *serve) Start(cmd *cobra.Command) {
 	)
 	c.managers.capture.Start()
 
-	if c.configs.WebRTC.Dataplane != "" {
-		c.logger.Info().Str("addr", c.configs.WebRTC.Dataplane).Msg("using external dataplane for the media path")
-		c.managers.webRTC = webrtcp.New(
-			c.managers.desktop,
-			c.managers.capture,
-			&c.configs.WebRTC,
-			c.configs.WebRTC.Dataplane,
-		)
-	} else {
-		c.managers.webRTC = webrtc.New(
-			c.managers.desktop,
-			c.managers.capture,
-			&c.configs.WebRTC,
-		)
-	}
+	c.managers.webRTC = webrtc.New(
+		c.managers.desktop,
+		c.managers.capture,
+		&c.configs.WebRTC,
+	)
 	c.managers.webRTC.Start()
 
 	c.managers.webSocket = websocket.New(

@@ -52,11 +52,6 @@ type WebRTC struct {
 	NAT1To1IPs     []string
 	IpRetrievalUrl string
 
-	// Dataplane, when non-empty (e.g. unix:///run/neko/dataplane.sock),
-	// delegates the media path (capture + WebRTC) to an external
-	// neko-dataplane process instead of the embedded pion/GStreamer one.
-	Dataplane string
-
 	Estimator WebRTCEstimator
 }
 
@@ -109,11 +104,6 @@ func (WebRTC) Init(cmd *cobra.Command) error {
 
 	cmd.PersistentFlags().String("webrtc.ip_retrieval_url", "https://checkip.amazonaws.com", "URL address used for retrieval of the external IP address")
 	if err := viper.BindPFlag("webrtc.ip_retrieval_url", cmd.PersistentFlags().Lookup("webrtc.ip_retrieval_url")); err != nil {
-		return err
-	}
-
-	cmd.PersistentFlags().String("webrtc.dataplane", "", "unix socket address of the external media dataplane process (neko-dataplane); when empty, the embedded media path is used")
-	if err := viper.BindPFlag("webrtc.dataplane", cmd.PersistentFlags().Lookup("webrtc.dataplane")); err != nil {
 		return err
 	}
 
@@ -303,7 +293,6 @@ func (s *WebRTC) Set() {
 
 	s.NAT1To1IPs = viper.GetStringSlice("webrtc.nat1to1")
 	s.IpRetrievalUrl = viper.GetString("webrtc.ip_retrieval_url")
-	s.Dataplane = viper.GetString("webrtc.dataplane")
 	if s.IpRetrievalUrl != "" && len(s.NAT1To1IPs) == 0 {
 		ip, err := utils.HttpRequestGET(s.IpRetrievalUrl)
 		if err == nil {
