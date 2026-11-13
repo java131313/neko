@@ -8,6 +8,7 @@ use std::sync::Arc;
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS, MIME_TYPE_VP8};
@@ -54,7 +55,7 @@ impl Peer {
         session_id: &str,
         config: &Config,
         media: Option<Arc<MediaSource>>,
-        events: tokio::mpsc::UnboundedSender<PeerEvent>,
+        events: mpsc::UnboundedSender<PeerEvent>,
     ) -> Result<(Arc<Self>, String)> {
         let mut media_engine = MediaEngine::default();
         let video_capability = register_codecs(&mut media_engine, &config.capture.video_codec)?;
@@ -117,7 +118,7 @@ impl Peer {
             _writers: writers,
         });
 
-        peer.wire_events(events).await?;
+        peer.wire_events(events)?;
 
         // the server generates the offer (neko v3 flow: signal/provide)
         let offer = peer.pc.create_offer(None).await?;
@@ -126,7 +127,7 @@ impl Peer {
         Ok((peer, offer.sdp))
     }
 
-    fn wire_events(&self, events: tokio::mpsc::UnboundedSender<PeerEvent>) -> Result<()> {
+    fn wire_events(&self, events: mpsc::UnboundedSender<PeerEvent>) -> Result<()> {
         let session_id = self.session_id.clone();
 
         // ICE candidates -> client via signal/candidate

@@ -25,7 +25,7 @@ pub struct EncodedFrame {
 
 /// Owns the capture pipelines and fans encoded frames out to peer track
 /// writers via broadcast channels (one per stream). Started on the first
-//! peer, stopped when the last peer goes away.
+/// peer, stopped when the last peer goes away.
 pub struct MediaSource {
     pipelines: Vec<PipelineHandle>,
     pub video_tx: broadcast::Sender<EncodedFrame>,

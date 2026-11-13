@@ -10,7 +10,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use serde_json::Value;
 use tokio::sync::{mpsc, RwLock};
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::capture::{self, MediaSource};
 use crate::config::Config;
