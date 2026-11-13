@@ -1,0 +1,37 @@
+name: neko-rs check
+
+on:
+  push:
+    paths:
+      - 'neko-rs/**'
+      - '.github/workflows/neko_rs_check.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: cargo check + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GStreamer dev libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: neko-rs
+
+      - name: cargo check
+        working-directory: neko-rs
+        run: cargo check --all-targets
+
+      - name: cargo test (protocol units)
+        working-directory: neko-rs
+        run: cargo test --lib
