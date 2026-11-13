@@ -156,8 +156,31 @@ impl Config {
         // NEKO_WEBRTC_ICESERVERS: JSON array like pion's ICEServer
         let ice_servers = env("NEKO_WEBRTC_ICESERVERS")
             .map(|v| serde_json::from_str::<Vec<IceServer>>(&v).context("ICESERVERS json"))
-            .transpose()?
-            .unwrap_or_default();
+            .transpose()?;
+
+        // Convenience: NEKO_TURN_* synthesizes entries for the embedded
+        // coturn (see neko-rs/turnserver.conf). NEKO_TURN_HOST is the
+        // PUBLIC address browsers reach — required for the synthesis.
+        let ice_servers = ice_servers.filter(|s: &Vec<IceServer>| !s.is_empty());
+        let ice_servers = match ice_servers {
+            Some(servers) => servers,
+            None => std::env::var("NEKO_TURN_USERNAME")
+                .ok()
+                .filter(|v| !v.is_empty())
+                .and_then(|username| {
+                    let host = env("NEKO_TURN_HOST")?;
+                    let port = env("NEKO_TURN_PORT").unwrap_or_else(|| "3478".into());
+                    Some(vec![IceServer {
+                        urls: vec![
+                            format!("turn:{host}:{port}?transport=udp"),
+                            format!("turn:{host}:{port}?transport=tcp"),
+                        ],
+                        username,
+                        credential: env("NEKO_TURN_PASSWORD").unwrap_or_else(|| "neko".into()),
+                    }])
+                })
+                .unwrap_or_default(),
+        };
 
         Ok(Config {
             server: Server {

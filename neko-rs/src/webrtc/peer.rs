@@ -18,7 +18,7 @@ use webrtc::data_channel::data_channel_message::DataChannelMessage;
 use webrtc::ice_transport::ice_candidate_type::RTCIceCandidateType;
 use webrtc::interceptor::registry::Registry;
 use webrtc::media::Sample;
-use webrtc::peer_connection::configuration::RTCConfiguration;
+use webrtc::peer_connection::configuration::{RTCConfiguration, RTCIceServer};
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::rtp_transceiver::rtp_codec::{RTCRtpCodecCapability, RTCRtpCodecParameters, RTPCodecType};
@@ -66,8 +66,28 @@ impl Peer {
         let registry = register_default_interceptors(registry, &mut media_engine)?;
 
         let mut setting_engine = SettingEngine::default();
-        setting_engine.set_lite(config.webrtc.ice_lite);
+        // ICE-Lite cannot gather relay candidates — when TURN servers are
+        // configured (the embedded coturn / SealOS path), full ICE wins
+        let ice_lite = config.webrtc.ice_lite && config.webrtc.ice_servers.is_empty();
+        if config.webrtc.ice_lite && !ice_lite {
+            info!("TURN servers configured: ICE-Lite disabled (relay needs full ICE)");
+        }
+        setting_engine.set_lite(ice_lite);
         setting_engine.set_nat_1to1_ips(config.webrtc.nat_1to1_ips.clone(), RTCIceCandidateType::Host);
+
+        let rtc_config = RTCConfiguration {
+            ice_servers: config
+                .webrtc
+                .ice_servers
+                .iter()
+                .map(|s| RTCIceServer {
+                    urls: s.urls.clone(),
+                    username: s.username.clone(),
+                    credential: s.credential.clone(),
+                })
+                .collect(),
+            ..Default::default()
+        };
 
         let api = APIBuilder::new()
             .with_media_engine(media_engine)
@@ -75,7 +95,7 @@ impl Peer {
             .with_setting_engine(setting_engine)
             .build();
 
-        let pc = api.new_peer_connection(RTCConfiguration::default()).await?;
+        let pc = api.new_peer_connection(rtc_config).await?;
 
         // "data" channel, server-side, like the embedded implementation:
         // carries input events and cursor/pong replies

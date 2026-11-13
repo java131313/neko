@@ -1,20 +1,27 @@
 # neko-rs all-in-one e2e image.
 #
 # Self-contained test image for the Rust server: Xvfb-style dummy X + pulse
-# + openbox + chromium + neko-rs + neko-webshell under supervisord. For
-# production the neko-rs binaries move into the regular image pipeline
+# + openbox + chromium + neko-rs + neko-webshell + coturn under supervisord.
+# For production the neko-rs binaries move into the regular image pipeline
 # (Dockerfile.tmpl server stage replacement); this exists to e2e the Rust
 # server against the unchanged client.
 #
-# Build:
-#   docker build -t neko-rs:test .
-# Run:
+# LAN / docker-run mode (ICE-Lite + pinned ephemeral ports):
 #   docker run -d --name neko-rs --shm-size=2g \
 #     -p 8080:8080 -p 7681:7681 -p 53000-53100:53000-53100/udp \
 #     --sysctl net.ipv4.ip_local_port_range=53000-53100 \
 #     -e NEKO_MEMBER_MULTIUSER_USER_PASSWORD=neko \
 #     -e NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD=admin \
-#     neko-rs:test
+#     ghcr.io/java131313/neko-rs:test
+#
+# SealOS / no-sysctl mode (embedded coturn, fixed ports only) — expose:
+#   8080 (tcp, HTTP/WS), 7681 (tcp, webshell), 3478 (udp+tcp, TURN),
+#   53400-53420 (udp, TURN relay range)
+#   env: NEKO_TURN_HOST=<public address>  (username/password default neko/neko,
+#        override with NEKO_TURN_USERNAME / NEKO_TURN_PASSWORD)
+# Both browser and neko-rs allocate relay candidates from coturn, so no
+# ephemeral-port pinning is needed anywhere. ICE-Lite is auto-disabled when
+# TURN servers are configured.
 
 ARG BASE_IMAGE=rust:1-slim-trixie
 FROM $BASE_IMAGE AS builder
@@ -70,7 +77,7 @@ RUN set -eux; \
         gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
         gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
         gstreamer1.0-pulseaudio \
-        chromium \
+        chromium coturn \
         fonts-noto-color-emoji fonts-wqy-zenhei fonts-wqy-microhei; \
     groupadd --gid 1000 neko; \
     useradd --uid 1000 --gid neko --shell /bin/bash --create-home neko; \
@@ -92,6 +99,8 @@ COPY neko-rs/supervisord.conf /etc/neko/supervisord.conf
 COPY runtime/supervisord.dbus.conf /etc/neko/supervisord.dbus.conf
 COPY runtime/xorg.conf /etc/neko/xorg.conf
 COPY neko-rs/supervisord.chromium.conf /etc/neko/supervisord/chromium.conf
+COPY neko-rs/supervisord.coturn.conf /etc/neko/supervisord/coturn.conf
+COPY neko-rs/turnserver.conf /etc/neko/turnserver.conf
 COPY apps/chromium/openbox.xml /etc/neko/openbox.xml
 COPY --chown=neko:neko runtime/.Xresources /home/neko/.Xresources
 
