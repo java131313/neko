@@ -125,7 +125,7 @@ impl Manager {
 
         let mut media = self.media.write().await;
         if media.is_none() {
-            let config = &self.config.capture;
+            let config = self.config.capture.clone();
             let video_pipeline = if config.video_pipeline.is_empty() {
                 capture::default_video_pipeline(
                     &config.display,
@@ -143,8 +143,17 @@ impl Manager {
                     .replace("{device}", &config.audio_device)
             };
 
-            let source = MediaSource::start(&video_pipeline, &audio_pipeline)?;
-            info!(%video_pipeline, %audio_pipeline, "media source started");
+            // gst calls can block (ximagesrc talks to X during set_state);
+            // a wedged X must never take down the HTTP/ws runtime
+            let source = tokio::task::spawn_blocking(move || {
+                MediaSource::start(&video_pipeline, &audio_pipeline)
+            })
+            .await
+            .context("media start task")?
+            .context("start media source")?;
+            if let Some(source) = &source {
+                info!(pipelines = source.pipeline_count(), "media source started");
+            }
             *media = source;
         }
         Ok(media.clone())

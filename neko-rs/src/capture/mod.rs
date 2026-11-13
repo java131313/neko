@@ -153,6 +153,10 @@ impl MediaSource {
     pub fn subscribe_audio(&self) -> broadcast::Receiver<EncodedFrame> {
         self.audio_tx.subscribe()
     }
+
+    pub fn pipeline_count(&self) -> usize {
+        self.pipelines.len()
+    }
 }
 
 impl Drop for MediaSource {
