@@ -3,3 +3,4 @@
 dataplane/target
 server/bin
 **/__pycache__
+neko-rs/target/
