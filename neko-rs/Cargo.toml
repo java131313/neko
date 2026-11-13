@@ -21,10 +21,9 @@ bytes = "1"
 gstreamer = "0.25"
 gstreamer-app = "0.25"
 webrtc = "=0.14.0"
-interceptor = "0.12"
 
 # desktop control (X11, pure rust)
-x11rb = { version = "0.13", features = ["xtest", "randr", "xfixes", "xkb", "image"] }
+x11rb = { version = "0.13", features = ["xtest", "randr", "xfixes", "xkb", "xinput", "image"] }
 
 # misc
 uuid = { version = "1", features = ["v4"] }
@@ -35,7 +34,6 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "json"]
 anyhow = "1"
 thiserror = "2"
 futures-util = "0.3"
-tokio-stream = { version = "0.1", features = ["sync"] }
 
 # neko-webshell binary (terminal ws->pty bridge, replaces apps/*/webshell.py)
 tokio-tungstenite = "0.30"

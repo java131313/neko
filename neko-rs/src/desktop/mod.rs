@@ -11,17 +11,18 @@
 
 use anyhow::{Context, Result};
 use tracing::debug;
-use x11rb::connection::Connection;
+use x11rb::connection::{Connection, RequestConnection};
 use x11rb::protocol::randr::ConnectionExt as _;
 use x11rb::protocol::xproto::{self, ConnectionExt as _};
 use x11rb::protocol::xtest::ConnectionExt as _;
 use x11rb::rust_connection::RustConnection;
 use x11rb::CURRENT_TIME;
 
-const KEY_PRESS: u8 = xproto::KeyPressEvent::NUMBER;
-const KEY_RELEASE: u8 = xproto::KeyReleaseEvent::NUMBER;
-const BUTTON_PRESS: u8 = xproto::ButtonPressEvent::NUMBER;
-const BUTTON_RELEASE: u8 = xproto::ButtonReleaseEvent::NUMBER;
+// core protocol event codes (xproto event numbers)
+const KEY_PRESS: u8 = 2;
+const KEY_RELEASE: u8 = 3;
+const BUTTON_PRESS: u8 = 4;
+const BUTTON_RELEASE: u8 = 5;
 
 /// Control_L keycode (x86 keymaps; matches the Xorg neko ships).
 const CONTROL_L_KEYCODE: u8 = 37;
@@ -72,11 +73,8 @@ impl Desktop {
             .get(reply.size_id as usize)
             .or(reply.sizes.first())
             .context("no randr screen sizes")?;
-        let rate = reply
-            .rates
-            .get(reply.rate as usize)
-            .copied()
-            .unwrap_or(0) as u32;
+        // RandR 1.1 GetScreenInfo carries the current refresh rate directly
+        let rate = reply.rate as u32;
         Ok((size.width as u32, size.height as u32, rate))
     }
 
@@ -161,8 +159,7 @@ impl Desktop {
     fn button_event(&self, button: u8, down: bool) -> Result<()> {
         let type_ = if down { BUTTON_PRESS } else { BUTTON_RELEASE };
         self.conn
-            .xtest_fake_input(type_, button, CURRENT_TIME, 0, 0, 0, 0)?
-            .void_cookie();
+            .xtest_fake_input(type_, button, CURRENT_TIME, 0, 0, 0, 0)?;
         self.conn.flush().context("flush button")?;
         Ok(())
     }
@@ -170,8 +167,7 @@ impl Desktop {
     fn key_event(&self, keycode: u8, down: bool) -> Result<()> {
         let type_ = if down { KEY_PRESS } else { KEY_RELEASE };
         self.conn
-            .xtest_fake_input(type_, keycode, CURRENT_TIME, 0, 0, 0, self.xtest_keyboard)?
-            .void_cookie();
+            .xtest_fake_input(type_, keycode, CURRENT_TIME, 0, 0, 0, self.xtest_keyboard)?;
         self.conn.flush().context("flush key")?;
         Ok(())
     }

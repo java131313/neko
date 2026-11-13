@@ -456,7 +456,7 @@ impl State {
             return;
         }
         let Some(desktop) = &self.inner.desktop else { return };
-        let mut desktop = desktop.lock().await;
+        let desktop = desktop.lock().await;
         let _ = desktop.key(0xffe3, true); // Control_L keysym
         let _ = desktop.key(0x0076, true); // v
         let _ = desktop.key(0x0076, false);
