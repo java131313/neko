@@ -68,10 +68,14 @@ pub enum ServerMessage {
     },
 }
 
-fn header(op: u8, len: usize, out: &mut BytesMut) {
-    debug_assert!(len <= u16::MAX as usize);
+/// The `length` field counts the WHOLE message including the 3-byte header
+/// (Go semantics — see the embedded handler.go: OP_CURSOR_POSITION has
+/// Length 7 with a 4-byte body, OP_PONG has Length 19 with a 16-byte body).
+fn header(op: u8, body_len: usize, out: &mut BytesMut) {
+    let total = 3 + body_len;
+    debug_assert!(total <= u16::MAX as usize);
     out.put_u8(op);
-    out.put_u16(len as u16);
+    out.put_u16(total as u16);
 }
 
 /// Mirrors the Go legacy quirk: an old 4-byte scroll (x, y: u16) arrives
@@ -219,15 +223,16 @@ mod tests {
     #[test]
     fn cursor_position_roundtrip() {
         let bytes = ServerMessage::CursorPosition { x: 1920, y: 1080 }.encode();
+        // field = total = 3 + 4; body follows
         assert_eq!(
             bytes.to_vec(),
-            frame(OP_CURSOR_POSITION, &[0x07, 0x80, 0x04, 0x38])
+            vec![OP_CURSOR_POSITION, 0, 7, 0x07, 0x80, 0x04, 0x38]
         );
     }
 
     #[test]
     fn pong_layout_matches_go() {
-        // Go: header{event,len=19} + ping(8) + ts(8) => 22 total
+        // Go: header{event, Length:19} + ping(8) + server_ts(8) = 19 bytes total
         let bytes = ServerMessage::Pong {
             client_ts1: 1,
             client_ts2: 2,
@@ -235,7 +240,7 @@ mod tests {
             server_ts2: 4,
         }
         .encode();
-        assert_eq!(bytes.len(), 3 + 19);
+        assert_eq!(bytes.len(), 19);
         assert_eq!(bytes[2], 19);
     }
 
