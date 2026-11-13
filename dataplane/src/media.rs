@@ -50,11 +50,21 @@ impl MediaSource {
         let mut pipelines = Vec::new();
 
         if !video_pipeline.is_empty() {
-            pipelines.push(Self::launch_pipeline("video", video_pipeline, video_tx.clone())?);
+            match Self::launch_pipeline("video", video_pipeline, video_tx.clone()) {
+                Ok(p) => pipelines.push(p),
+                Err(err) => error!(?err, "video pipeline failed to start"),
+            }
         }
 
         if !audio_pipeline.is_empty() {
-            pipelines.push(Self::launch_pipeline("audio", audio_pipeline, audio_tx.clone())?);
+            match Self::launch_pipeline("audio", audio_pipeline, audio_tx.clone()) {
+                Ok(p) => pipelines.push(p),
+                Err(err) => error!(?err, "audio pipeline failed to start"),
+            }
+        }
+
+        if pipelines.is_empty() {
+            anyhow::bail!("no capture pipeline could start");
         }
 
         info!(

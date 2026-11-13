@@ -85,13 +85,21 @@ func New(desktop types.DesktopManager, config *config.Capture) *CaptureManagerCt
 			return strings.Replace(config.AudioPipeline, "{device}", config.AudioDevice, 1), nil
 		}
 
+		// an empty device must omit the property entirely: `pulsesrc device=`
+		// breaks gst-launch parsing ("no element audio") and takes the
+		// whole media start down with it
+		source := "pulsesrc"
+		if config.AudioDevice != "" {
+			source = fmt.Sprintf("pulsesrc device=%s", config.AudioDevice)
+		}
+
 		return fmt.Sprintf(
-			"pulsesrc device=%s "+
+			"%s "+
 				"! audio/x-raw,channels=2 "+
 				"! audioconvert "+
 				"! queue max-size-buffers=5 leaky=downstream "+
 				"! %s "+
-				"! appsink name=appsink", config.AudioDevice, config.AudioCodec.Pipeline,
+				"! appsink name=appsink", source, config.AudioCodec.Pipeline,
 		), nil
 	}
 
