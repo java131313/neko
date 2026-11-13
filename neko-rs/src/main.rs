@@ -12,6 +12,7 @@ mod messages;
 mod payload;
 mod plugins;
 mod room;
+mod uid;
 mod webrtc;
 mod ws;
 
