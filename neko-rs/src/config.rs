@@ -55,10 +55,12 @@ pub struct WebRtc {
     pub ice_servers: Vec<IceServer>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct IceServer {
     pub urls: Vec<String>,
+    #[serde(default)]
     pub username: String,
+    #[serde(default)]
     pub credential: String,
 }
 

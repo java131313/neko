@@ -339,7 +339,8 @@ impl State {
                 host_id: new_host,
             },
         ));
-        info!(host = ?self.inner.host.read().await, by, "host changed");
+        let current = self.inner.host.read().await.clone();
+        info!(host = ?current, by, "host changed");
     }
 
     pub async fn host_is(&self, session_id: &str) -> bool {
