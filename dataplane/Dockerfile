@@ -38,13 +38,15 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     rm -rf proto src
 
 COPY . .
-# NB: the binary must be copied OUT of the target cache mount within the
+# NB: binaries must be copied OUT of the target cache mount within the
 # same RUN — cache mounts are discarded between steps.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release && \
-    cp /src/target/release/neko-dataplane /usr/local/bin/neko-dataplane
+    cp /src/target/release/neko-dataplane /usr/local/bin/neko-dataplane && \
+    cp /src/target/release/neko-webshell /usr/local/bin/neko-webshell
 
 FROM debian:trixie-slim
 
 COPY --from=builder /usr/local/bin/neko-dataplane /usr/local/bin/neko-dataplane
+COPY --from=builder /usr/local/bin/neko-webshell /usr/local/bin/neko-webshell
