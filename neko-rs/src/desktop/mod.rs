@@ -3,11 +3,11 @@
 //! moves, XTest button clicks for scroll, XTest key events, ctrl-wrapped
 //! scroll, RandR screen info.
 //!
-//! Known v1 simplification vs the C bridge: key dispatch uses core XTest
-//! (the C code prefers the XTEST XInput device so GDK3/Firefox's XI2 path
-//! sees keys — x11rb's fake_input does take a device id, wired below, but
-//! the dynamic XKB key-remap fallback (XkbAddKeyKeysym) is not ported:
-//! keysyms outside the current keymap are dropped with a log line).
+//! Keysyms outside the current keymap (CJK/unicode input) get an
+//! xdotool-style dynamic remap: a free keycode is repurposed via core
+//! ChangeKeyboardMapping, mirroring XkbAddKeyKeysym in xorg.c. Remaps are
+//! kept for the session and updated in the local cache so repeat presses
+//! reuse the same keycode.
 
 use anyhow::{Context, Result};
 use tracing::debug;
@@ -31,8 +31,10 @@ pub struct Desktop {
     conn: RustConnection,
     screen_num: usize,
     root: xproto::Window,
-    /// first keycode + keysyms-per-keycode from GetKeyboardMapping, cached
-    keymap: (u8, Vec<Vec<u32>>),
+    /// first keycode + keysyms-per-keycode from GetKeyboardMapping.
+    /// Mutated by remap_keycode (RefCell: all access is serialized by the
+    /// tokio::Mutex the room wraps us in).
+    keymap: std::cell::RefCell<(u8, Vec<Vec<u32>>)>,
     /// XTEST keyboard device id (XInput), 0 = core protocol
     xtest_keyboard: u8,
 }
@@ -47,7 +49,7 @@ impl Desktop {
             .context("XTEST extension missing")?;
 
         let root = conn.setup().roots[screen_num].root;
-        let keymap = load_keymap(&conn)?;
+        let keymap = std::cell::RefCell::new(load_keymap(&conn)?);
         let xtest_keyboard = find_xtest_keyboard(&conn).unwrap_or(0);
 
         Ok(Desktop {
@@ -160,15 +162,14 @@ impl Desktop {
     }
 
     /// Keysym (X11 keysym, not keycode) press/release. Resolution order
-    /// mirrors XKey: cached entry on release, then the current keymap.
+    /// mirrors XKey: cached keymap lookup first; keysyms not present
+    /// (CJK/unicode) get a dynamic remap onto a free keycode, exactly like
+    /// XkbAddKeyKeysym/xdotool, so IME-composed text reaches X clients.
     pub fn key(&self, keysym: u32, down: bool) -> Result<()> {
         if keysym == 0 {
             return Ok(());
         }
-        let Some(keycode) = self.keysym_to_keycode(keysym) else {
-            debug!(keysym, "keysym not in keymap (dynamic remap not ported)");
-            return Ok(());
-        };
+        let keycode = self.resolve_keycode(keysym)?;
         self.key_event(keycode, down)
     }
 
@@ -195,14 +196,126 @@ impl Desktop {
         Ok(())
     }
 
-    fn keysym_to_keycode(&self, keysym: u32) -> Option<u8> {
-        let (first, map) = &self.keymap;
-        for (i, codes) in map.iter().enumerate() {
-            if codes.contains(&keysym) {
-                return Some(first + i as u8);
-            }
+    /// XKey resolution: existing keymap first, dynamic remap as fallback.
+    /// On remap the new mapping is pushed to the server and the local
+    /// cache, so subsequent presses of the same keysym reuse the keycode.
+    fn resolve_keycode(&self, keysym: u32) -> Result<u8> {
+        let mut keymap = self.keymap.borrow_mut();
+        if let Some(keycode) = keysym_to_keycode_in(&keymap, keysym) {
+            return Ok(keycode);
         }
-        None
+
+        let (first, map) = &mut *keymap;
+        // free keycode = every column NoSymbol; scan max→min like the
+        // TigerVNC code in xorg.c
+        let idx = map
+            .iter()
+            .rposition(|codes| codes.iter().all(|&sym| sym == 0))
+            .context("no free keycode for dynamic keysym remap")?;
+        let keycode = first.wrapping_add(idx as u8);
+
+        // column layout follows the server's keysyms-per-keycode so the
+        // group/level geometry stays intact; group 1 gets (lower, upper),
+        // remaining columns NoSymbol
+        let per = map.first().map_or(1, Vec::len).max(1);
+        let (lower, upper) = convert_case(keysym);
+        let mut syms = vec![0u32; per];
+        syms[0] = lower;
+        if per > 1 {
+            // same keysym at the shift level when caseless (CJK), so a
+            // held Shift can't corrupt the injected char
+            syms[1] = upper;
+        }
+
+        self.conn
+            .change_keyboard_mapping(1, keycode, per as u8, &syms)
+            .context("change_keyboard_mapping")?;
+        self.conn.flush().context("flush keymap change")?;
+
+        map[idx] = syms;
+        debug!(keysym, keycode, "dynamically remapped keysym to free keycode");
+        Ok(keycode)
+    }
+}
+
+/// keymap tuple lookup shared by the method wrapper and the resolver.
+fn keysym_to_keycode_in(keymap: &(u8, Vec<Vec<u32>>), keysym: u32) -> Option<u8> {
+    let (first, map) = keymap;
+    for (i, codes) in map.iter().enumerate() {
+        if codes.contains(&keysym) {
+            return Some(first.wrapping_add(i as u8));
+        }
+    }
+    None
+}
+
+/// XConvertCase equivalent, Latin-1 only: covers the case pairs X11 knows
+/// in the single-byte range. Unicode keysyms (≥ 0x01000000, i.e. all CJK)
+/// are caseless → OneLevel keysyms, same as XkbAddKeyKeysym.
+fn convert_case(keysym: u32) -> (u32, u32) {
+    let lower = match keysym {
+        0x41..=0x5a => keysym + 32,                     // A-Z
+        0xc0..=0xde if keysym != 0xd7 => keysym + 32,   // À-Þ except ×
+        _ => keysym,
+    };
+    let upper = match keysym {
+        0x61..=0x7a => keysym - 32,                     // a-z
+        0xe0..=0xfe if keysym != 0xf7 => keysym - 32,   // à-þ except ÷
+        _ => keysym,
+    };
+    (lower, upper)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// keymap with keycodes min=8: kc8=[a,A], kc9=[b,B], kc10 free, kc11 free
+    fn sample_keymap() -> (u8, Vec<Vec<u32>>) {
+        (
+            8,
+            vec![
+                vec![0x61, 0x41],
+                vec![0x62, 0x42],
+                vec![0, 0],
+                vec![0, 0],
+            ],
+        )
+    }
+
+    #[test]
+    fn lookup_finds_keysym() {
+        let map = sample_keymap();
+        assert_eq!(keysym_to_keycode_in(&map, 0x61), Some(8));
+        assert_eq!(keysym_to_keycode_in(&map, 0x41), Some(8)); // shift level
+        assert_eq!(keysym_to_keycode_in(&map, 0x62), Some(9));
+        assert_eq!(keysym_to_keycode_in(&map, 0x4e2d), None); // 中 not mapped
+    }
+
+    #[test]
+    fn free_keycode_scan_picks_highest_empty() {
+        let map = sample_keymap();
+        let idx = map
+            .1
+            .iter()
+            .rposition(|codes| codes.iter().all(|&s| s == 0));
+        assert_eq!(idx, Some(3)); // max→min, like XkbAddKeyKeysym
+    }
+
+    #[test]
+    fn convert_case_latin1() {
+        assert_eq!(convert_case(0x61), (0x61, 0x41)); // a → (a, A)
+        assert_eq!(convert_case(0x41), (0x61, 0x41)); // A → (a, A)
+        assert_eq!(convert_case(0xe9), (0xe9, 0xc9)); // é → (é, É)
+        assert_eq!(convert_case(0xd7), (0xd7, 0xd7)); // × has no case
+        assert_eq!(convert_case(0xf7), (0xf7, 0xf7)); // ÷ has no case
+    }
+
+    #[test]
+    fn convert_case_cjk_is_caseless() {
+        // 中 U+4E2D → keysym 0x01004E2D, OneLevel like XkbAddKeyKeysym
+        let zhong = 0x01004e2d;
+        assert_eq!(convert_case(zhong), (zhong, zhong));
     }
 }
 
