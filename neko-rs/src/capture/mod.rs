@@ -51,10 +51,20 @@ impl MediaSource {
 
         let mut pipelines = Vec::new();
         if !video_pipeline.is_empty() {
-            pipelines.push(Self::launch("video", video_pipeline, video_tx.clone())?);
+            match Self::launch("video", video_pipeline, video_tx.clone()) {
+                Ok(p) => pipelines.push(p),
+                Err(err) => error!(?err, "video pipeline failed to start"),
+            }
         }
         if !audio_pipeline.is_empty() {
-            pipelines.push(Self::launch("audio", audio_pipeline, audio_tx.clone())?);
+            match Self::launch("audio", audio_pipeline, audio_tx.clone()) {
+                Ok(p) => pipelines.push(p),
+                Err(err) => error!(?err, "audio pipeline failed to start"),
+            }
+        }
+
+        if pipelines.is_empty() {
+            anyhow::bail!("no capture pipeline could start");
         }
 
         info!(pipelines = pipelines.len(), "media source started");
@@ -168,6 +178,36 @@ fn default_duration(name: &str) -> Duration {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_audio_device_omits_property() {
+        let p = default_audio_pipeline("");
+        assert!(!p.contains("device="), "empty device must omit the property: {p}");
+        assert!(p.starts_with("pulsesrc !"));
+        assert!(p.contains("appsink name=appsink"));
+    }
+
+    #[test]
+    fn audio_device_set_when_given() {
+        let p = default_audio_pipeline("alsa_output.pci-0000");
+        assert!(p.starts_with("pulsesrc device=alsa_output.pci-0000 !"));
+    }
+
+    #[test]
+    fn video_pipeline_layout() {
+        let p = default_video_pipeline(":99.0", false, "vp8");
+        assert!(p.starts_with("ximagesrc display-name=:99.0 show-pointer=false"));
+        assert!(p.contains("vp8enc"));
+        assert!(p.ends_with("appsink name=appsink"));
+        let h = default_video_pipeline(":0", true, "h264");
+        assert!(h.contains("show-pointer=true"));
+        assert!(h.contains("x264enc"));
+    }
+}
+
 /// Assemble the video pipeline string for a video stream (port of the Go
 /// capture defaults: ximagesrc + fps caps + vp8enc/x264enc with the same
 /// parameter values as server/internal/config).
@@ -194,9 +234,17 @@ pub fn default_video_pipeline(display: &str, show_pointer: bool, codec: &str) ->
 }
 
 /// Assemble the audio pipeline string (pulsesrc + opusenc, Go defaults).
+/// An empty device must OMIT `device=` entirely — `pulsesrc device= ! ...`
+/// fails gst-launch parsing ("no element audio") and kills the whole
+/// capture start.
 pub fn default_audio_pipeline(device: &str) -> String {
+    let source = if device.is_empty() {
+        "pulsesrc".to_owned()
+    } else {
+        format!("pulsesrc device={device}")
+    };
     format!(
-        "pulsesrc device={device} ! audio/x-raw,channels=2 ! audioconvert ! \
+        "{source} ! audio/x-raw,channels=2 ! audioconvert ! \
          queue max-size-buffers=5 leaky=downstream ! opusenc inband-fec=true \
          bitrate=128000 ! appsink name=appsink"
     )
