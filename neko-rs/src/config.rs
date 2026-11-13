@@ -192,10 +192,17 @@ impl Config {
             },
             member: Member {
                 provider: env_or("NEKO_MEMBER_PROVIDER", "multiuser"),
-                user_password: env("NEKO_MEMBER_MULTIUSER_USER_PASSWORD")
-                    .context("NEKO_MEMBER_MULTIUSER_USER_PASSWORD is required")?,
-                admin_password: env("NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD")
-                    .context("NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD is required")?,
+                // Go defaults both to "neko" with a warning; hard-failing
+                // here leaves the container dead on platforms that drop
+                // env vars, so match the embedded behavior.
+                user_password: env("NEKO_MEMBER_MULTIUSER_USER_PASSWORD").unwrap_or_else(|| {
+                    tracing::warn!("NEKO_MEMBER_MULTIUSER_USER_PASSWORD not set, using 'neko'");
+                    "neko".to_owned()
+                }),
+                admin_password: env("NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD").unwrap_or_else(|| {
+                    tracing::warn!("NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD not set, using 'neko'");
+                    "neko".to_owned()
+                }),
             },
             webrtc: WebRtc {
                 ice_lite: env_bool("NEKO_WEBRTC_ICELITE", false),
