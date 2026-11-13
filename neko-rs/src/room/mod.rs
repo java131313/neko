@@ -35,6 +35,8 @@ pub struct Inner {
     pub screen_size: RwLock<ScreenSize>,
     /// room-wide events (session/created, control/host, clipboard, ...)
     pub bus: broadcast::Sender<Envelope>,
+    /// webrtc peer manager (phase C)
+    pub webrtc: crate::webrtc::Manager,
 }
 
 pub struct SessionEntry {
@@ -59,7 +61,7 @@ pub enum AuthError {
 }
 
 impl State {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, webrtc_events: tokio::sync::mpsc::UnboundedSender<crate::webrtc::PeerEvent>) -> Self {
         let settings = Settings {
             private_mode: config.room.private_mode,
             locked_logins: config.room.locked_logins,
@@ -77,6 +79,7 @@ impl State {
             rate: config.desktop.screen_rate,
         };
         let (bus, _) = broadcast::channel(BUS_CAP);
+        let webrtc = crate::webrtc::Manager::new(config.clone(), webrtc_events);
         State {
             inner: Arc::new(Inner {
                 config,
@@ -86,6 +89,7 @@ impl State {
                 settings: RwLock::new(settings),
                 screen_size: RwLock::new(screen_size),
                 bus,
+                webrtc,
             }),
         }
     }
@@ -270,6 +274,7 @@ impl State {
                 id: session_id.to_owned(),
             },
         ));
+        self.inner.webrtc.destroy_peer(session_id).await;
         info!(session_id, "session expired");
     }
 

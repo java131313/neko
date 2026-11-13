@@ -26,11 +26,16 @@ async fn main() -> Result<()> {
     let config = config::Config::from_env().context("read configuration")?;
     info!(bind = %config.server.bind, "neko-rs starting");
 
-    let state = room::State::new(config.clone());
+    // gstreamer must be initialized once before any pipeline exists
+    gstreamer::init().context("gstreamer init")?;
+
+    // peer events (ICE candidates, connection state, data channel input)
+    // forward into session sockets; the task lives as long as the server
+    let (events_tx, events_rx) = tokio::sync::mpsc::unbounded_channel();
+    let state = room::State::new(config.clone(), events_tx);
+    tokio::spawn(webrtc::forward_events(events_rx, state.clone()));
 
     // TODO(phase:desktop): open X11 connection, screen size, clipboard watch
-    // TODO(phase:capture): assemble + start pipelines on demand
-    // TODO(phase:webrtc): peer manager wired into ws signalling
 
     let app = api::router(state.clone());
 

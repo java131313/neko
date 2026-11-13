@@ -153,14 +153,71 @@ async fn reader_task(
     clean
 }
 
-/// Client -> server event dispatch. Media/signal events land in phase C;
-/// plugin events in phase E.
+/// Client -> server event dispatch.
 async fn dispatch(state: &State, session_id: &str, env: Envelope) {
     use messages::client_events as ev;
     match env.event.as_str() {
         ev::HEARTBEAT => {}
         ev::CONTROL_REQUEST => state.control_request(session_id).await,
         ev::CONTROL_RELEASE => state.control_release(session_id).await,
+
+        // ---- signalling (phase C) ----
+        ev::SIGNAL_REQUEST => {
+            let can_watch = state
+                .session_by_id(session_id)
+                .await
+                .map(|s| s.profile.can_watch)
+                .unwrap_or(false);
+            if !can_watch {
+                tracing::debug!("watch not allowed");
+                return;
+            }
+            match state.inner.webrtc.create_peer(session_id).await {
+                Ok(provide) => {
+                    state.send_to(session_id, &provide).await;
+                }
+                Err(err) => warn!(?err, %session_id, "create peer failed"),
+            }
+        }
+        ev::SIGNAL_OFFER => {
+            // browser-side renegotiation (microphone share): answer it
+            let Some(sdp) = env.payload["sdp"].as_str() else { return };
+            if let Some(peer) = state.inner.webrtc.peer(session_id).await {
+                match peer.set_remote("offer", sdp).await {
+                    Ok(()) => match peer.create_answer().await {
+                        Ok(answer) => {
+                            state
+                                .send_to(
+                                    session_id,
+                                    &Envelope {
+                                        event: messages::server_events::SIGNAL_ANSWER.to_owned(),
+                                        payload: serde_json::json!({ "sdp": answer }),
+                                    },
+                                )
+                                .await;
+                        }
+                        Err(err) => warn!(?err, "create answer failed"),
+                    },
+                    Err(err) => warn!(?err, "set remote offer failed"),
+                }
+            }
+        }
+        ev::SIGNAL_ANSWER => {
+            let Some(sdp) = env.payload["sdp"].as_str() else { return };
+            if let Some(peer) = state.inner.webrtc.peer(session_id).await {
+                if let Err(err) = peer.set_remote("answer", sdp).await {
+                    warn!(?err, "set remote answer failed");
+                }
+            }
+        }
+        ev::SIGNAL_CANDIDATE => {
+            if let Some(peer) = state.inner.webrtc.peer(session_id).await {
+                if let Err(err) = peer.add_ice_candidate(env.payload).await {
+                    warn!(?err, "add candidate failed");
+                }
+            }
+        }
+
         other => {
             debug!(%other, "unhandled client event (later phase)");
         }
