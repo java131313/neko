@@ -216,7 +216,7 @@ fn find_xtest_keyboard(conn: &RustConnection) -> Option<u8> {
         let name = reply
             .names
             .get(i)
-            .map(|s| String::from_utf8_lossy(&s.0).into_owned())
+            .map(|s| String::from_utf8_lossy(&s.name).into_owned())
             .unwrap_or_default();
         if name.contains("XTEST keyboard") {
             return Some(device.device_id);
