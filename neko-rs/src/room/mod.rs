@@ -23,7 +23,7 @@ const BUS_CAP: usize = 256;
 /// Shared server state, handed to axum handlers and the ws loop.
 #[derive(Clone)]
 pub struct State {
-    inner: Arc<Inner>,
+    pub inner: Arc<Inner>,
 }
 
 pub struct Inner {

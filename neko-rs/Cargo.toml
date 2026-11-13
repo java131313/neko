@@ -39,7 +39,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 
 # neko-webshell binary (terminal ws->pty bridge, replaces apps/*/webshell.py)
 tokio-tungstenite = "0.30"
-nix = { version = "0.31", features = ["fs", "process", "signal"] }
+nix = { version = "0.31", features = ["fs", "process", "signal", "term"] }
 libc = "0.2"
 
 [[bin]]

@@ -121,7 +121,7 @@ async fn send_envelope(
     env: Envelope,
 ) -> Result<(), ()> {
     let text = serde_json::to_string(&env).unwrap_or_default();
-    sink.send(AxumMessage::Text(text)).await.map_err(|_| ())
+    sink.send(AxumMessage::Text(text.into())).await.map_err(|_| ())
 }
 
 /// Returns true when the socket closed cleanly (1000/1001) — no grace period.
@@ -198,15 +198,13 @@ async fn destroy(mut socket: WebSocket, message: &str) {
         })
         .unwrap_or_default(),
     };
+    let text = serde_json::to_string(&env).unwrap_or_default();
+    let _ = socket.send(AxumMessage::Text(text.into())).await;
+    // axum 0.8 has no inherent close(frame): send the close message, drop ends it
     let _ = socket
-        .send(AxumMessage::Text(
-            serde_json::to_string(&env).unwrap_or_default(),
-        ))
-        .await;
-    let _ = socket
-        .close(Some(CloseFrame {
+        .send(AxumMessage::Close(Some(CloseFrame {
             code: 1000,
             reason: message.to_owned().into(),
-        }))
+        })))
         .await;
 }
