@@ -38,6 +38,14 @@ go build \
     cmd/neko/main.go;
 
 #
+# build the webshell terminal bridge (pty + websocket, replaces the retired
+# python implementation; no cgo so it builds anywhere the server builds)
+go build \
+    -o bin/neko-webshell \
+    -ldflags "-s -w" \
+    cmd/webshell/main.go;
+
+#
 # ensure plugins folder exists
 mkdir -p bin/plugins
 

@@ -41,13 +41,15 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
 #
-# install the webshell server (raw WebSocket <-> PTY bridge for the client terminal tab) and pi.
-# Node.js comes from the official tarball because Debian's nodejs is older than pi's requirement.
+# install Node.js for pi (the AI agent CLI, run `pi` inside the webshell).
+# The terminal itself is the Go neko-webshell binary, shipped from the server
+# build stage (see Dockerfile.tmpl). Node.js comes from the official tarball
+# because Debian's nodejs is older than pi's requirement.
 # publish port 7681 to reach the terminal from the browser (-p 7681:7681)
 ARG NODE_VERSION=22.19.0
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends python3-websockets curl xz-utils ca-certificates; \
+    apt-get install -y --no-install-recommends curl xz-utils ca-certificates; \
     #
     # nodejs for pi (>= 22.19)
     ARCH=$(dpkg --print-architecture); \
@@ -73,8 +75,6 @@ RUN set -eux; \
 # copy configuation files
 COPY profile-sync.sh /usr/bin/neko-profile-sync
 RUN chmod +x /usr/bin/neko-profile-sync
-COPY webshell.py /usr/bin/neko-webshell
-RUN chmod +x /usr/bin/neko-webshell
 COPY supervisord.conf /etc/neko/supervisord/chromium.conf
 COPY --chown=neko preferences.json /home/neko/.config/chromium/Default/Preferences
 COPY policies.json /etc/chromium/policies/managed/policies.json

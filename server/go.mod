@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/PaesslerAG/gval v1.2.4
+	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
