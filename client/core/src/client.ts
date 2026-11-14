@@ -164,9 +164,9 @@ export class NekoClient {
     const touchCapable = 'ontouchstart' in window || navigator.maxTouchPoints > 0
     if (!touchCapable) return false
     // iPad in desktop mode and iPad with a paired mouse/trackpad report
-    // pointer:fine + hover:hover; maxTouchPoints > 1 is the reliable tell
-    // (Macs report 0) and those still need the soft-keyboard button
-    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true
+    // pointer:fine + hover:hover; a Mac-like UA with multi-touch
+    // (maxTouchPoints > 1; Macs report 0) is the reliable tell
+    if (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent)) return true
     return !matchMedia('(pointer:fine)').matches && !matchMedia('(hover:hover)').matches
   }
 
