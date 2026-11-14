@@ -97,7 +97,10 @@ client.setUrl('http://neko.test/some/path/')
 assert.equal(client.api.url, 'http://neko.test/some/path')
 assert.ok(client.transport instanceof pkg.WebRTCTransport)
 assert.equal(client.transport.kind, 'webrtc')
-assert.ok(client.input instanceof pkg.DataChannelInput)
+// the data channel is the primary, wrapped in the websocket fallback
+// (used until the channel reports ready)
+assert.ok(client.input instanceof pkg.FallbackInput)
+assert.ok(client.input.primary instanceof pkg.DataChannelInput)
 const noop = () => {}
 const custom = {
   kind: 'hls',
