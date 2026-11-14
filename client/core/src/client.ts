@@ -161,11 +161,13 @@ export class NekoClient {
 
   get isTouchDevice() {
     if (this.opts.inputMode) return this.opts.inputMode === 'touch'
-    return (
-      ('ontouchstart' in window || navigator.maxTouchPoints > 0) &&
-      !matchMedia('(pointer:fine)').matches &&
-      !matchMedia('(hover:hover)').matches
-    )
+    const touchCapable = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    if (!touchCapable) return false
+    // iPad in desktop mode and iPad with a paired mouse/trackpad report
+    // pointer:fine + hover:hover; maxTouchPoints > 1 is the reliable tell
+    // (Macs report 0) and those still need the soft-keyboard button
+    if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true
+    return !matchMedia('(pointer:fine)').matches && !matchMedia('(hover:hover)').matches
   }
 
   /////////////////////////////

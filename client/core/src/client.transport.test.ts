@@ -204,11 +204,12 @@ test('disconnect closes the transport; the overlay channel is the transport’s 
   const keys: [number, boolean][] = []
   own.input = { move() {}, scroll() {}, button() {}, key: (keysym, down) => keys.push([keysym, down]), touch() {} }
   const c2 = new NekoClient({ transport: () => own })
-  assert.equal(c2.input, own.input, 'the transport’s own channel wins')
-  assert.equal(c2.transport, own, 'a factory is called once')
+  // the transport's channel is wrapped in the websocket fallback (used
+  // until the channel reports ready); keys still reach the channel
   c2.input.key(0xff0d, true)
   assert.deepEqual(keys, [[0xff0d, true]])
   assert.deepEqual(sent, [])
+  assert.equal(c2.transport, own, 'a factory is called once')
 })
 
 test('play, pause, mute, unmute, volume and shareMedia go through the transport; the video state mirrors it', async () => {

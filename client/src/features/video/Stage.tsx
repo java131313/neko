@@ -152,7 +152,9 @@ export function Stage({ hideControls, extraControls }: { hideControls: boolean; 
               </li>
             )}
             {hosting && client.isTouchDevice && (
-              <li className={cn('mb-2.5 last:mb-0', extra)}>
+              // always visible on touch devices, not only within the phone
+              // breakpoint: tablets (>768px) need the soft keyboard too
+              <li className="mb-2.5 last:mb-0">
                 <IconButton
                   variant="video"
                   label="Keyboard"
