@@ -23,5 +23,6 @@ export type {
 } from './transport.ts'
 export { WebRTCTransport } from './transport/webrtc.ts'
 export { DataChannelInput } from './input/datachannel.ts'
+export { FallbackInput } from './input/fallback.ts'
 export { WebSocketInput } from './input/websocket.ts'
 export * from './types.ts'

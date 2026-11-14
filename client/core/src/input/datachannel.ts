@@ -30,6 +30,12 @@ export class DataChannelInput implements InputChannel {
   onCursorPosition?: (pos: { x: number; y: number }) => void
   onCursorImage?: (image: CursorImage) => void
 
+  // InputChannel: only ready once the SCTP association is up — the client
+  // falls back to the websocket before that
+  ready() {
+    return this.dc?.readyState === 'open'
+  }
+
   // the channel the server opened on the peer connection; null once the peer is gone
   bind(dc: RTCDataChannel | null) {
     if (!dc) {

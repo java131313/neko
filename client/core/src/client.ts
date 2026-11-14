@@ -9,6 +9,7 @@ import { subscribeWithSelector } from 'zustand/middleware'
 import { Emitter } from './emitter.ts'
 import { NekoApi, ApiError } from './api.ts'
 import { WebRTCTransport } from './transport/webrtc.ts'
+import { FallbackInput } from './input/fallback.ts'
 import { WebSocketInput } from './input/websocket.ts'
 import type { InputChannel, SessionInfo, StreamTransport, TransportState } from './transport.ts'
 import type { State, Settings, ScreenSize, NekoEvents, LoginResponse } from './types.ts'
@@ -100,7 +101,11 @@ export class NekoClient {
     this.opts = opts
     const t = opts.transport
     this.transport = typeof t === 'function' ? t() : (t ?? new WebRTCTransport())
-    this.input = this.transport.input ?? new WebSocketInput(this)
+    // input prefers the transport's own path (the data channel) and falls
+    // back to the websocket while that is not ready, so a stalled data
+    // channel never means a dead keyboard
+    const fallback = new WebSocketInput(this)
+    this.input = this.transport.input ? new FallbackInput(this.transport.input, fallback) : fallback
     this.transport.on('state', (s) => this.onTransportState(s))
     this.transport.on('error', (err) => this.close(err))
 

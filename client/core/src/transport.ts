@@ -52,6 +52,10 @@ export interface SessionInfo {
 // input to the remote desktop, in the server's terms (keysyms, button codes, touch ids); how it
 // travels is the channel's business
 export interface InputChannel {
+  // whether the channel can carry input right now; when absent, assumed true.
+  // lets a transport whose own path is not up yet (the WebRTC data channel
+  // while ICE is still connecting) fall back to the websocket
+  ready?(): boolean
   move(x: number, y: number): void
   scroll(deltaX: number, deltaY: number, controlKey: boolean): void
   button(code: number, down: boolean): void
