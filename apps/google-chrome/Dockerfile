@@ -16,7 +16,10 @@ RUN set -eux; \
     SRC_URL="${SRC_URL:-https://dl.google.com/linux/direct/google-chrome-stable_current_${ARCH}.deb}"; \
     apt-get update; \
     wget -O /tmp/google-chrome.deb "${SRC_URL}"; \
-    apt-get install -y --no-install-recommends openbox /tmp/google-chrome.deb; \
+    # postgresql-client + sqlite3: profile state sync and browsing log
+    # (neko-profile-sync restores/backs up the profile and mirrors History
+    # entries into the configured postgres)
+    apt-get install -y --no-install-recommends openbox postgresql-client sqlite3 /tmp/google-chrome.deb; \
     # Install the ARM64 CDM prepared by the runtime where Chrome discovers it.
     if [ "${ARCH}" = "arm64" ]; then \
         mkdir -p /opt/google/chrome/WidevineCdm; \
@@ -30,6 +33,8 @@ RUN set -eux; \
 #
 # copy configuation files
 COPY supervisord.conf /etc/neko/supervisord/google-chrome.conf
+COPY profile-sync.sh /usr/bin/neko-profile-sync
+RUN chmod +x /usr/bin/neko-profile-sync
 COPY --chown=neko preferences.json /home/neko/.config/google-chrome/Default/Preferences
 COPY policies.json /etc/opt/chrome/policies/managed/policies.json
 COPY openbox.xml /etc/neko/openbox.xml

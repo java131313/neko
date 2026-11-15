@@ -20,12 +20,14 @@
 
 set -u
 
-PROFILE_DIR="${NEKO_CHROMIUM_PROFILE_DIR:-/home/neko/.config/chromium}"
-DB_URL="${NEKO_CHROMIUM_STATE_URL:-}"
-INTERVAL="${NEKO_CHROMIUM_STATE_INTERVAL:-30}"
-TABLE="${NEKO_CHROMIUM_STATE_TABLE:-neko_chromium_state}"
-LOG_TABLE="${NEKO_CHROMIUM_LOG_TABLE:-neko_browsing_log}"
-ID="${NEKO_CHROMIUM_STATE_ID:-default}"
+# NEKO_BROWSER_* is the generic name (google-chrome and future apps); the
+# legacy NEKO_CHROMIUM_* spelling keeps existing chromium deployments working.
+PROFILE_DIR="${NEKO_BROWSER_PROFILE_DIR:-${NEKO_CHROMIUM_PROFILE_DIR:-/home/neko/.config/chromium}}"
+DB_URL="${NEKO_BROWSER_STATE_URL:-${NEKO_CHROMIUM_STATE_URL:-}}"
+INTERVAL="${NEKO_BROWSER_STATE_INTERVAL:-${NEKO_CHROMIUM_STATE_INTERVAL:-30}}"
+TABLE="${NEKO_BROWSER_STATE_TABLE:-${NEKO_CHROMIUM_STATE_TABLE:-neko_chromium_state}}"
+LOG_TABLE="${NEKO_BROWSER_LOG_TABLE:-${NEKO_CHROMIUM_LOG_TABLE:-neko_browsing_log}}"
+ID="${NEKO_BROWSER_STATE_ID:-${NEKO_CHROMIUM_STATE_ID:-default}}"
 NEKO_LOG="${NEKO_SERVER_LOG:-/var/log/neko/neko.log}"
 
 log() { echo "[profile-sync] $*"; }
@@ -36,7 +38,7 @@ LOG_TABLE=$(echo "$LOG_TABLE" | tr -cd 'a-zA-Z0-9_')
 ID=$(echo "$ID" | tr -cd 'a-zA-Z0-9_-')
 
 if [ -z "$DB_URL" ]; then
-    log "NEKO_CHROMIUM_STATE_URL not set, running without state sync"
+    log "NEKO_BROWSER_STATE_URL (or legacy NEKO_CHROMIUM_STATE_URL) not set, running without state sync"
     exec "$@"
 fi
 
