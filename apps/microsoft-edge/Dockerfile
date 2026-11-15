@@ -10,7 +10,10 @@ RUN set -eux; apt-get update; \
     # fetch latest release
     SRC_URL="${API_URL}$(wget -O - "${API_URL}" 2>/dev/null | sed -n 's/.*href="\([^"]*\).*/\1/p' | sort --version-sort | tail -1)"; \
     wget -O /tmp/microsoft-edge.deb "${SRC_URL}"; \
-    apt-get install -y --no-install-recommends openbox /tmp/microsoft-edge.deb; \
+    # postgresql-client + sqlite3: profile state sync and browsing log
+    # (neko-profile-sync restores/backs up the profile and mirrors History
+    # entries into the configured postgres)
+    apt-get install -y --no-install-recommends openbox postgresql-client sqlite3 /tmp/microsoft-edge.deb; \
     #
     # clean up
     apt-get clean -y; \
@@ -19,6 +22,8 @@ RUN set -eux; apt-get update; \
 #
 # copy configuation files
 COPY supervisord.conf /etc/neko/supervisord/microsoft-edge.conf
+COPY profile-sync.sh /usr/bin/neko-profile-sync
+RUN chmod +x /usr/bin/neko-profile-sync
 COPY --chown=neko preferences.json /home/neko/.config/microsoft-edge/Default/Preferences
 COPY policies.json /etc/opt/edge/policies/managed/policies.json
 COPY openbox.xml /etc/neko/openbox.xml
