@@ -2,7 +2,7 @@ ARG BASE_IMAGE=ghcr.io/m1k1o/neko/base:latest
 FROM $BASE_IMAGE
 
 RUN set -eux; apt-get update; \
-    apt-get install -y --no-install-recommends apt-transport-https curl openbox; \
+    apt-get install -y --no-install-recommends apt-transport-https curl openbox postgresql-client sqlite3; \
     #
     # install brave browser
     ARCH=$(dpkg --print-architecture); \
@@ -25,6 +25,8 @@ RUN set -eux; apt-get update; \
 #
 # copy configuation files
 COPY supervisord.conf /etc/neko/supervisord/brave.conf
+COPY profile-sync.sh /usr/bin/neko-profile-sync
+RUN chmod +x /usr/bin/neko-profile-sync
 COPY --chown=neko preferences.json /home/neko/.config/brave/Default/Preferences
 COPY policies.json /etc/brave/policies/managed/policies.json
 COPY openbox.xml /etc/neko/openbox.xml
