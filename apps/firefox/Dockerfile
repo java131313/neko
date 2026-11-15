@@ -4,7 +4,10 @@ FROM $BASE_IMAGE
 #
 # install firefox
 RUN set -eux; apt-get update; \
-    apt-get install -y --no-install-recommends openbox; \
+    # postgresql-client + sqlite3: profile state sync and browsing log
+    # (neko-profile-sync backs the profile up to postgres and mirrors
+    # places.sqlite history entries into the browsing log)
+    apt-get install -y --no-install-recommends openbox postgresql-client sqlite3; \
     ARCH=$(dpkg --print-architecture); \
     if [ "${ARCH}" = "armhf" ]; then \
         #
@@ -49,6 +52,8 @@ RUN set -eux; apt-get update; \
 #
 # copy configuation files
 COPY supervisord.conf /etc/neko/supervisord/firefox.conf
+COPY profile-sync.sh /usr/bin/neko-profile-sync
+RUN chmod +x /usr/bin/neko-profile-sync
 COPY neko.js /usr/lib/firefox/mozilla.cfg
 COPY autoconfig.js /usr/lib/firefox/defaults/pref/autoconfig.js
 COPY policies.json /usr/lib/firefox/distribution/policies.json

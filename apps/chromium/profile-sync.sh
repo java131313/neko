@@ -1,15 +1,19 @@
 #!/bin/bash
-# Neko chromium profile state sync + browsing log.
+# Neko browser profile state sync + browsing log.
 #
-# 1) Profile state: keeps the chromium profile (open tabs, history, cookies)
+# 1) Profile state: keeps the browser profile (open tabs, history, cookies)
 #    persisted in PostgreSQL so container restarts restore the last session.
-# 2) Browsing log: reads new entries from chromium's History and upserts them
-#    into a per-user log table (URL, search keyword, first/last opened time).
-#    The username is resolved from neko's server log: websocket connect and
-#    disconnect events carry session_id=<member>-<suffix>.
+# 2) Browsing log: reads new entries from the browser's History/places sqlite
+#    and upserts them into a per-user log table (URL, search keyword,
+#    first/last opened time). The username is resolved from neko's server
+#    log: websocket connect and disconnect events carry session_id=<member>-<suffix>.
 #
-# Requires NEKO_CHROMIUM_STATE_URL (postgresql://...) at runtime; without it
-# chromium simply runs without sync/logging.
+# Engines (NEKO_BROWSER_ENGINE, default chromium): chromium covers the whole
+# chromium family (chromium, google-chrome, microsoft-edge, ...); firefox
+# uses the nested *.default*/ profile dir and places.sqlite history.
+#
+# Requires NEKO_BROWSER_STATE_URL (postgresql://...) at runtime; without it
+# the browser simply runs without sync/logging.
 #
 # Tables (created automatically):
 #   <state_table> (id text PRIMARY KEY, data text, updated_at timestamptz)
@@ -20,8 +24,9 @@
 
 set -u
 
-# NEKO_BROWSER_* is the generic name (google-chrome and future apps); the
-# legacy NEKO_CHROMIUM_* spelling keeps existing chromium deployments working.
+# NEKO_BROWSER_* is the generic name (google-chrome/microsoft-edge/firefox and
+# future apps); the legacy NEKO_CHROMIUM_* spelling keeps existing chromium
+# deployments working.
 PROFILE_DIR="${NEKO_BROWSER_PROFILE_DIR:-${NEKO_CHROMIUM_PROFILE_DIR:-/home/neko/.config/chromium}}"
 DB_URL="${NEKO_BROWSER_STATE_URL:-${NEKO_CHROMIUM_STATE_URL:-}}"
 INTERVAL="${NEKO_BROWSER_STATE_INTERVAL:-${NEKO_CHROMIUM_STATE_INTERVAL:-30}}"
@@ -29,6 +34,24 @@ TABLE="${NEKO_BROWSER_STATE_TABLE:-${NEKO_CHROMIUM_STATE_TABLE:-neko_chromium_st
 LOG_TABLE="${NEKO_BROWSER_LOG_TABLE:-${NEKO_CHROMIUM_LOG_TABLE:-neko_browsing_log}}"
 ID="${NEKO_BROWSER_STATE_ID:-${NEKO_CHROMIUM_STATE_ID:-default}}"
 NEKO_LOG="${NEKO_SERVER_LOG:-/var/log/neko/neko.log}"
+
+# browser engine: chromium covers the chromium family (chromium, google-chrome,
+# microsoft-edge, ...); firefox has a different profile layout and history DB
+ENGINE="${NEKO_BROWSER_ENGINE:-chromium}"
+
+# per-engine history database path (chromium: History sqlite, firefox: places.sqlite)
+history_db() {
+    if [ "$ENGINE" = firefox ]; then
+        local d
+        for d in "$PROFILE_DIR"/*.default*/; do
+            [ -d "$d" ] && { printf '%splaces.sqlite' "$d"; return; }
+        done
+        # matches the profiles.ini shipped by the firefox app (Path=profile.default)
+        printf '%s/profile.default/places.sqlite' "$PROFILE_DIR"
+    else
+        printf '%s/Default/History' "$PROFILE_DIR"
+    fi
+}
 
 log() { echo "[profile-sync] $*"; }
 
@@ -54,24 +77,36 @@ sql_escape() { printf '%s' "$1" | sed "s/'/''/g"; }
 
 save() {
     # never snapshot an empty profile over a good one
-    [ -s "$PROFILE_DIR/Default/History" ] || return 0
+    [ -s "$(history_db)" ] || return 0
     local b64
-    b64=$(tar -czf - -C "$PROFILE_DIR" \
-        --exclude='Default/Cache' \
-        --exclude='Default/Code Cache' \
-        --exclude='Default/GPUCache' \
-        --exclude='Default/Service Worker/CacheStorage' \
-        --exclude='Default/DawnGraphiteCache' \
-        --exclude='Default/DawnWebGPUCache' \
-        --exclude='GrShaderCache' \
-        --exclude='ShaderCache' \
-        --exclude='GraphiteDawnCache' \
-        --exclude='component_crx_cache' \
-        --exclude='CertificateRevocation' \
-        --exclude='SingletonLock' \
-        --exclude='SingletonCookie' \
-        --exclude='SingletonSocket' \
-        . 2>/dev/null | base64 -w0) || return 0
+    if [ "$ENGINE" = firefox ]; then
+        # sessionstore.jsonlz4 is firefox's "open tabs" state: keep it
+        b64=$(tar -czf - -C "$PROFILE_DIR" \
+            --exclude='*/cache2' \
+            --exclude='*/startupCache' \
+            --exclude='*/thumbnails' \
+            --exclude='*/minidumps' \
+            --exclude='*/.parentlock' \
+            --exclude='*/lock' \
+            . 2>/dev/null | base64 -w0) || return 0
+    else
+        b64=$(tar -czf - -C "$PROFILE_DIR" \
+            --exclude='Default/Cache' \
+            --exclude='Default/Code Cache' \
+            --exclude='Default/GPUCache' \
+            --exclude='Default/Service Worker/CacheStorage' \
+            --exclude='Default/DawnGraphiteCache' \
+            --exclude='Default/DawnWebGPUCache' \
+            --exclude='GrShaderCache' \
+            --exclude='ShaderCache' \
+            --exclude='GraphiteDawnCache' \
+            --exclude='component_crx_cache' \
+            --exclude='CertificateRevocation' \
+            --exclude='SingletonLock' \
+            --exclude='SingletonCookie' \
+            --exclude='SingletonSocket' \
+            . 2>/dev/null | base64 -w0) || return 0
+    fi
     [ -n "$b64" ] || return 0
     printf "INSERT INTO %s (id, data, updated_at) VALUES ('%s', '%s', now()) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at;" \
         "$TABLE" "$ID" "$b64" | psql_c -f - \
@@ -89,8 +124,12 @@ restore() {
             mkdir -p "$PROFILE_DIR"
             if tar -xzf "$tgz" -C "$PROFILE_DIR" 2>/dev/null; then
                 # stale inter-process locks from a previous container would
-                # block chromium startup ("profile appears to be in use")
-                rm -f "$PROFILE_DIR"/SingletonLock "$PROFILE_DIR"/SingletonCookie "$PROFILE_DIR"/SingletonSocket
+                # block browser startup ("profile appears to be in use")
+                if [ "$ENGINE" = firefox ]; then
+                    rm -f "$PROFILE_DIR"/*/.parentlock "$PROFILE_DIR"/*/lock
+                else
+                    rm -f "$PROFILE_DIR"/SingletonLock "$PROFILE_DIR"/SingletonCookie "$PROFILE_DIR"/SingletonSocket
+                fi
                 log "restored profile snapshot from database"
             fi
         fi
@@ -99,7 +138,13 @@ restore() {
 }
 
 sig() {
-    stat -c %Y "$PROFILE_DIR/Default/Sessions" "$PROFILE_DIR/Default/History" 2>/dev/null | tr '\n' ' '
+    if [ "$ENGINE" = firefox ]; then
+        local d
+        d=$(dirname "$(history_db)")
+        stat -c %Y "$d/places.sqlite" "$d/sessionstore.jsonlz4" "$d/sessionstore-backups/recovery.jsonlz4" 2>/dev/null | tr '\n' ' '
+    else
+        stat -c %Y "$PROFILE_DIR/Default/Sessions" "$PROFILE_DIR/Default/History" 2>/dev/null | tr '\n' ' '
+    fi
 }
 
 #
@@ -172,7 +217,8 @@ search_keyword() {
 }
 
 log_history() {
-    local db="$PROFILE_DIR/Default/History"
+    local db
+    db=$(history_db)
     [ -s "$db" ] || return 0
 
     local members
@@ -182,16 +228,25 @@ log_history() {
     local wm=0
     [ -s "$WATERMARK_FILE" ] && wm=$(cat "$WATERMARK_FILE" 2>/dev/null || echo 0)
 
-    # hot-copy the sqlite files so we don't fight chromium's WAL locks
+    # hot-copy the sqlite files so we don't fight the browser's WAL locks
     local tmpd
     tmpd=$(mktemp -d)
-    cp "$db" "$tmpd/History" 2>/dev/null
-    [ -f "$db-wal" ] && cp "$db-wal" "$tmpd/History-wal" 2>/dev/null
-    [ -f "$db-shm" ] && cp "$db-shm" "$tmpd/History-shm" 2>/dev/null
+    local base
+    base=$(basename "$db")
+    cp "$db" "$tmpd/$base" 2>/dev/null
+    [ -f "$db-wal" ] && cp "$db-wal" "$tmpd/$base-wal" 2>/dev/null
+    [ -f "$db-shm" ] && cp "$db-shm" "$tmpd/$base-shm" 2>/dev/null
 
     local rows
-    rows=$(sqlite3 -readonly "$tmpd/History" \
-        "SELECT visits.id, urls.url, COALESCE(urls.title, ''), datetime(visits.visit_time/1000000 - 11644473600, 'unixepoch') FROM visits JOIN urls ON urls.id = visits.url WHERE visits.id > $wm ORDER BY visits.id ASC LIMIT 500;" 2>/dev/null)
+    if [ "$ENGINE" = firefox ]; then
+        # places.sqlite: visit_date is microseconds since the unix epoch
+        rows=$(sqlite3 -readonly "$tmpd/$base" \
+            "SELECT v.id, p.url, COALESCE(p.title, ''), datetime(v.visit_date/1000000, 'unixepoch') FROM moz_historyvisits v JOIN moz_places p ON p.id = v.place_id WHERE v.id > $wm ORDER BY v.id ASC LIMIT 500;" 2>/dev/null)
+    else
+        # History: visit_time is microseconds since 1601-01-01
+        rows=$(sqlite3 -readonly "$tmpd/$base" \
+            "SELECT visits.id, urls.url, COALESCE(urls.title, ''), datetime(visits.visit_time/1000000 - 11644473600, 'unixepoch') FROM visits JOIN urls ON urls.id = visits.url WHERE visits.id > $wm ORDER BY visits.id ASC LIMIT 500;" 2>/dev/null)
+    fi
     rm -rf "$tmpd"
     [ -n "$rows" ] || return 0
 
@@ -225,7 +280,7 @@ psql_c -c "CREATE TABLE IF NOT EXISTS $LOG_TABLE (id bigserial PRIMARY KEY, user
     || log "WARNING: browsing log table unavailable"
 
 # restore only when there is no local profile yet (fresh container)
-if [ ! -s "$PROFILE_DIR/Default/History" ]; then
+if [ ! -s "$(history_db)" ]; then
     restore
 fi
 
