@@ -7,8 +7,11 @@ ARG API_URL="https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edg
 # install microsoft edge
 RUN set -eux; apt-get update; \
     #
-    # fetch latest release
-    SRC_URL="${API_URL}$(wget -O - "${API_URL}" 2>/dev/null | sed -n 's/.*href="\([^"]*\).*/\1/p' | sort --version-sort | tail -1)"; \
+    # fetch latest release for the BUILD architecture (the pool mixes archs
+    # and the newest version may not ship an arm64 deb yet - a blind
+    # "last href" picked the amd64 deb and apt failed with an arch mismatch)
+    ARCH="$(dpkg --print-architecture)"; \
+    SRC_URL="${API_URL}$(wget -O - "${API_URL}" 2>/dev/null | sed -n 's/.*href="\([^"]*\).*/\1/p' | grep "_${ARCH}\.deb" | sort --version-sort | tail -1)"; \
     wget -O /tmp/microsoft-edge.deb "${SRC_URL}"; \
     # postgresql-client + sqlite3: profile state sync and browsing log
     # (neko-profile-sync restores/backs up the profile and mirrors History
