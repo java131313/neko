@@ -4,7 +4,7 @@ FROM $BASE_IMAGE
 #
 # install dependencies
 RUN set -eux; apt-get update; \
-    apt-get install -y --no-install-recommends openbox curl xz-utils file libgtk-3-0 libdbus-glib-1-2; \
+    apt-get install -y --no-install-recommends openbox curl xz-utils file libgtk-3-0 libdbus-glib-1-2 postgresql-client sqlite3; \
     #
     # download TOR browser (for amd64 and arm64)
     ARCH=$(dpkg --print-architecture); \
@@ -31,4 +31,6 @@ RUN set -eux; apt-get update; \
 #
 # copy configuation file
 COPY supervisord.conf /etc/neko/supervisord/tor-browser.conf
+COPY profile-sync.sh /usr/bin/neko-profile-sync
+RUN chmod +x /usr/bin/neko-profile-sync
 COPY openbox.xml /etc/neko/openbox.xml
