@@ -11,7 +11,11 @@ RUN set -eux; apt-get update; \
     # and the newest version may not ship an arm64 deb yet - a blind
     # "last href" picked the amd64 deb and apt failed with an arch mismatch)
     ARCH="$(dpkg --print-architecture)"; \
-    SRC_URL="${API_URL}$(wget -O - "${API_URL}" 2>/dev/null | sed -n 's/.*href="\([^"]*\).*/\1/p' | grep "_${ARCH}\.deb" | sort --version-sort | tail -1)"; \
+    DEB_NAME="$(wget -O - "${API_URL}" 2>/dev/null | sed -n 's/.*href="\([^"]*\).*/\1/p' | grep "_${ARCH}\.deb" | sort --version-sort | tail -1)"; \
+    # the stable pool is amd64-only at the time of writing: fail loudly
+    # instead of feeding the HTML listing to apt
+    [ -n "${DEB_NAME}" ] || { echo "no microsoft-edge-stable ${ARCH} deb in pool"; exit 1; }; \
+    SRC_URL="${API_URL}${DEB_NAME}"; \
     wget -O /tmp/microsoft-edge.deb "${SRC_URL}"; \
     # postgresql-client + sqlite3: profile state sync and browsing log
     # (neko-profile-sync restores/backs up the profile and mirrors History

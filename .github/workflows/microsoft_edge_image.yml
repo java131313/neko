@@ -1,7 +1,8 @@
 name: microsoft-edge image
 
-# 手动构建 microsoft-edge 镜像(Go 版 neko,含 profile 状态同步/浏览记录),
-# 双架构推 ghcr。与 google_chrome_image 同构,固定 app=microsoft-edge。
+# 手动构建 microsoft-edge 镜像(Go 版 neko,含 profile 状态同步/浏览记录)。
+# 仅 linux/amd64:微软 stable 池只有 amd64 的 deb(2026-11 核实,无 arm64
+# 包可装),arm64 镜像无从构建。
 on:
   workflow_dispatch:
 
@@ -91,6 +92,7 @@ jobs:
           tags: ghcr.io/${{ github.repository }}/microsoft-edge:${{ needs.build-base.outputs.branch_tag }}
           build-args: |
             BASE_IMAGE=ghcr.io/${{ github.repository }}/base:${{ needs.build-base.outputs.branch_tag }}
-          platforms: linux/amd64,linux/arm64
+          # microsoft-edge-stable ships no arm64 deb (pool verified 2026-11)
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
