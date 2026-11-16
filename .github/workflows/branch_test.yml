@@ -22,6 +22,7 @@ on:
           - remmina
           - vlc
           - vscode
+          - zed
           - xfce
           - kde
 
