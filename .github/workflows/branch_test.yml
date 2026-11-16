@@ -21,6 +21,7 @@ on:
           - tor-browser
           - remmina
           - vlc
+          - vscode
           - xfce
           - kde
 
