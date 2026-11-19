@@ -13,6 +13,7 @@ import { Header } from '@/layout/Header'
 import { Side } from '@/layout/Side'
 import { RoomBar } from '@/layout/RoomBar'
 import { Stage } from '@/features/video/Stage'
+import { AppTabs } from '@/features/video/AppTabs'
 import { MemberMenu } from '@/features/members/MemberMenu'
 import { Connect } from '@/features/connect/Connect'
 import { About } from '@/features/about/About'
@@ -69,8 +70,9 @@ export function App() {
             </div>
           )}
           {/* .video-container: index.html sizes it before the app renders (iOS) */}
-          <div className="video-container flex max-w-full grow bg-black/40">
+          <div className="video-container relative flex max-w-full grow bg-black/40">
             <Stage hideControls={cast} extraControls={videoOnly} />
+            <AppTabs />
           </div>
           {!videoOnly && <RoomBar />}
         </main>

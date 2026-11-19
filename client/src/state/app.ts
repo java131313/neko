@@ -39,6 +39,9 @@ export function createAppStore() {
     tab: get<string>('tab', 'chat'),
     // openinapp/init: links can be opened on the remote desktop
     openInApp: false,
+    // apptab switcher (neko-rs): available desktop apps and the raised one
+    apps: [] as string[],
+    activeApp: '' as string,
     emotes: {} as Record<string, string>,
     ignored: {} as Record<string, boolean>,
     broadcast: { active: false, url: '' },

@@ -110,6 +110,8 @@ export function wireEvents(neko: NekoApp) {
   // plugin events (`chat/*`, ...) are dispatched by the plugin registry
   ev.on('message', (event, payload) => {
     if (event === 'openinapp/init') app.setState({ openInApp: !!payload.enabled })
+    // neko-rs apptab switcher: current app + available list
+    if (event === 'apptab') app.setState({ activeApp: payload.app ?? '', apps: payload.apps ?? [] })
   })
 
   ev.on('connection.closed', (error) => {
