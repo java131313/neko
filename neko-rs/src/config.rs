@@ -276,6 +276,10 @@ impl Config {
                                 id: "chromium".to_owned(),
                                 class_matches: vec!["chromium".to_owned()],
                             },
+                            AppTab {
+                                id: "vlc".to_owned(),
+                                class_matches: vec!["vlc".to_owned()],
+                            },
                         ]
                     }),
             },

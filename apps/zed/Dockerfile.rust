@@ -13,7 +13,7 @@ FROM $BASE_IMAGE
 RUN set -eux; apt-get update; \
     apt-get install -y --no-install-recommends wget curl xz-utils git unzip gh \
         libvulkan1 mesa-vulkan-drivers libxkbcommon0 libasound2t64 golang-go \
-        chromium; \
+        chromium vlc; \
     #
     # Zed, matching the image architecture
     ARCH=$(dpkg --print-architecture); \
@@ -64,3 +64,7 @@ RUN set -eux; apt-get update; \
 # copy configuation files
 COPY supervisord.rust.conf /etc/neko/supervisord/zed.conf
 COPY openbox.xml /etc/neko/openbox.xml
+
+# vlc's default media location (a bare UI when empty, like the vlc app)
+ENV VLC_MEDIA="/media"
+RUN mkdir -p /media && chown neko:neko /media

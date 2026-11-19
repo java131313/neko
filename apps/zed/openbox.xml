@@ -27,6 +27,12 @@
       <focus>yes</focus>
       <layer>normal</layer>
     </application>
+    <application class="vlc" name="vlc" role="vlc-main">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+      <layer>normal</layer>
+    </application>
 </applications>
 
 <focus>
