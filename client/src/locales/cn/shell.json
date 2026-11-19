@@ -1,4 +1,6 @@
 {
   "tab": "终端",
-  "disconnected": "终端连接已断开"
+  "disconnected": "终端连接已断开",
+  "fullscreen": "全屏",
+  "windowed": "退出全屏"
 }

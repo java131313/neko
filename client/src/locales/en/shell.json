@@ -1,4 +1,6 @@
 {
   "tab": "Terminal",
-  "disconnected": "terminal connection lost"
+  "disconnected": "terminal connection lost",
+  "fullscreen": "Full screen",
+  "windowed": "Exit full screen"
 }
