@@ -16,10 +16,14 @@
 # LAN / docker-run mode (ICE-Lite + pinned ephemeral ports):
 #   docker run -d --name neko-rs --shm-size=2g \
 #     -p 8080:8080 -p 7681:7681 -p 53000-53100:53000-53100/udp \
-#     --sysctl net.ipv4.ip_local_port_range=53000-53100 \
+#     --sysctl "net.ipv4.ip_local_port_range=53000 53100" \
 #     -e NEKO_MEMBER_MULTIUSER_USER_PASSWORD=neko \
 #     -e NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD=admin \
 #     ghcr.io/java131313/neko-rs:test
+#
+# (sysctl value must be SPACE-separated — the kernel rejects "53000-53100"
+# with EINVAL; and Docker Desktop may refuse net.* sysctls altogether —
+# it is only a collision safeguard for the pinned port range, safe to drop)
 #
 # SealOS / no-sysctl mode (embedded coturn, fixed ports only) — expose:
 #   8080 (tcp, HTTP/WS), 7681 (tcp, webshell), 3478 (udp+tcp, TURN),
