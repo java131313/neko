@@ -1,10 +1,17 @@
-# neko-rs all-in-one e2e image.
+# neko-rs all-in-one e2e image + reusable Rust-stack base.
 #
-# Self-contained test image for the Rust server: Xvfb-style dummy X + pulse
-# + openbox + chromium + neko-rs + neko-webshell + coturn under supervisord.
-# For production the neko-rs binaries move into the regular image pipeline
-# (Dockerfile.tmpl server stage replacement); this exists to e2e the Rust
-# server against the unchanged client.
+# Stages:
+#   builder  – compiles neko-rs + neko-webshell (Rust)
+#   client   – builds the unchanged Vue client to /var/www
+#   base     – Rust-stack neko base image: X + pulse + openbox + gstreamer
+#              + neko-rs + neko-webshell + client under supervisord.
+#              App images (apps/<app>/Dockerfile.rust) build FROM this;
+#              they drop their [program:<app>] conf into
+#              /etc/neko/supervisord/ and their openbox.xml into /etc/neko/.
+#              No browser, no coturn. Tag: ghcr.io/java131313/neko/base-rs:<branch>
+#   e2e      – (default target) base + chromium + coturn + profile sync,
+#              self-contained test image for the Rust server
+#              (tag ghcr.io/java131313/neko-rs:test).
 #
 # LAN / docker-run mode (ICE-Lite + pinned ephemeral ports):
 #   docker run -d --name neko-rs --shm-size=2g \
@@ -71,7 +78,7 @@ RUN npm ci
 COPY client/ ./
 RUN npm run build
 
-FROM debian:trixie-slim
+FROM debian:trixie-slim AS base
 
 ARG DEBIAN_MIRROR=""
 
@@ -88,7 +95,6 @@ RUN set -eux; \
         gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
         gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
         gstreamer1.0-pulseaudio \
-        chromium coturn postgresql-client sqlite3 \
         fonts-noto-color-emoji fonts-wqy-zenhei fonts-wqy-microhei; \
     groupadd --gid 1000 neko; \
     useradd --uid 1000 --gid neko --shell /bin/bash --create-home neko; \
@@ -97,7 +103,7 @@ RUN set -eux; \
     adduser neko pulse; \
     mkdir /tmp/.X11-unix; \
     chmod 1777 /tmp/.X11-unix; \
-    mkdir -p /var/log/neko /run/neko; \
+    mkdir -p /var/log/neko /run/neko /etc/neko/supervisord; \
     chown neko /var/log/neko /run/neko; \
     apt-get clean -y; \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*
@@ -106,16 +112,13 @@ RUN set -eux; \
 # with `docker build -f neko-rs/Dockerfile .`)
 COPY runtime/dbus /usr/bin/dbus
 COPY runtime/default.pa /etc/pulse/default.pa
-COPY neko-rs/supervisord.conf /etc/neko/supervisord.conf
 COPY runtime/supervisord.dbus.conf /etc/neko/supervisord.dbus.conf
 COPY runtime/xorg.conf /etc/neko/xorg.conf
-COPY neko-rs/supervisord.chromium.conf /etc/neko/supervisord/chromium.conf
-COPY neko-rs/supervisord.coturn.conf /etc/neko/supervisord/coturn.conf
-COPY neko-rs/turnserver.conf /etc/neko/turnserver.conf
-COPY apps/chromium/profile-sync.sh /usr/bin/neko-profile-sync
-RUN chmod +x /usr/bin/neko-profile-sync
-COPY apps/chromium/openbox.xml /etc/neko/openbox.xml
 COPY --chown=neko:neko runtime/.Xresources /home/neko/.Xresources
+
+# main supervisord config: x-server + pulseaudio + neko-rs + webshell,
+# includes /etc/neko/supervisord/*.conf for the app-specific programs
+COPY neko-rs/supervisord.conf /etc/neko/supervisord.conf
 
 COPY --from=builder /usr/local/bin/neko-rs /usr/bin/neko-rs
 COPY --from=builder /usr/local/bin/neko-webshell /usr/bin/neko-webshell
@@ -126,13 +129,6 @@ ENV DISPLAY=:99.0
 ENV PULSE_SERVER=unix:/tmp/pulseaudio.socket
 ENV XDG_RUNTIME_DIR=/tmp/runtime-neko
 ENV NEKO_SERVER_BIND=:8080
-ENV NEKO_CAPTURE_VIDEO_DISPLAY=:99.0
-# capture chromium's audio: the monitor of default.pa's audio_output sink
-# (explicit beats relying on pulse's default-source selection)
-ENV NEKO_CAPTURE_AUDIO_DEVICE=audio_output.monitor
-ENV NEKO_WEBRTC_ICELITE=1
-# profile-sync.sh follows this log for online users (session_id markers)
-ENV NEKO_SERVER_LOG=/var/log/neko/neko-rs.log
 
 EXPOSE 8080 7681
 
@@ -140,3 +136,34 @@ HEALTHCHECK --interval=10s --timeout=5s --retries=8 \
     CMD wget -O - http://localhost:8080/health || exit 1
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/neko/supervisord.conf"]
+
+# e2e test image: base + chromium + coturn + profile sync (all-in-one
+# self-contained Rust-stack test image, default target)
+FROM base AS e2e
+
+ARG DEBIAN_MIRROR=""
+
+RUN set -eux; \
+    if [ -n "$DEBIAN_MIRROR" ]; then \
+        sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    apt-get update; \
+    apt-get -o Acquire::Retries=8 install -y --no-install-recommends \
+        chromium coturn postgresql-client sqlite3; \
+    apt-get clean -y; \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+
+COPY neko-rs/supervisord.chromium.conf /etc/neko/supervisord/chromium.conf
+COPY neko-rs/supervisord.coturn.conf /etc/neko/supervisord/coturn.conf
+COPY neko-rs/turnserver.conf /etc/neko/turnserver.conf
+COPY apps/chromium/profile-sync.sh /usr/bin/neko-profile-sync
+RUN chmod +x /usr/bin/neko-profile-sync
+COPY apps/chromium/openbox.xml /etc/neko/openbox.xml
+
+ENV NEKO_CAPTURE_VIDEO_DISPLAY=:99.0
+# capture chromium's audio: the monitor of default.pa's audio_output sink
+# (explicit beats relying on pulse's default-source selection)
+ENV NEKO_CAPTURE_AUDIO_DEVICE=audio_output.monitor
+ENV NEKO_WEBRTC_ICELITE=1
+# profile-sync.sh follows this log for online users (session_id markers)
+ENV NEKO_SERVER_LOG=/var/log/neko/neko-rs.log
