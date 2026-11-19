@@ -19,6 +19,14 @@
       <focus>yes</focus>
       <layer>normal</layer>
     </application>
+    <!-- Zed starts windowed; maximize it like the browser so the apptab
+      switcher (which raises the chosen window) covers the screen -->
+    <application class="Zed*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+      <layer>normal</layer>
+    </application>
 </applications>
 
 <focus>

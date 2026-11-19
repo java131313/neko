@@ -12,7 +12,8 @@ FROM $BASE_IMAGE
 # Workspace holds the demogit repo.
 RUN set -eux; apt-get update; \
     apt-get install -y --no-install-recommends wget curl xz-utils git unzip gh \
-        libvulkan1 mesa-vulkan-drivers libxkbcommon0 libasound2t64 golang-go; \
+        libvulkan1 mesa-vulkan-drivers libxkbcommon0 libasound2t64 golang-go \
+        chromium; \
     #
     # Zed, matching the image architecture
     ARCH=$(dpkg --print-architecture); \
