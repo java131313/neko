@@ -73,9 +73,14 @@ RUN set -eux; \
 
 COPY neko-rs/ .
 # NB: binaries must be copied OUT of the target cache mount in the same RUN
+# (fetch first with retries: the registry cache may be cold/partial after a
+# failed run, and crates.io downloads occasionally flake on CI)
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release && \
+    for i in 1 2 3; do cargo fetch --locked && break || sleep 15; done; \
+    for i in 1 2 3; do cargo build --locked --release && break || sleep 15; done; \
+    test -f /src/target/release/neko-rs || exit 1; \
+    test -f /src/target/release/neko-webshell || exit 1; \
     cp /src/target/release/neko-rs /usr/local/bin/neko-rs && \
     cp /src/target/release/neko-webshell /usr/local/bin/neko-webshell
 

@@ -4,3 +4,6 @@ dataplane/target
 server/bin
 **/__pycache__
 neko-rs/target/
+# docs only: keep the `COPY neko-rs/ .` layer cache valid across doc edits
+neko-rs/Dockerfile
+neko-rs/README.md
