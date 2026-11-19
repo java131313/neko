@@ -161,7 +161,7 @@ impl Desktop {
             false,
             self.root,
             xproto::EventMask::SUBSTRUCTURE_REDIRECT | xproto::EventMask::SUBSTRUCTURE_NOTIFY,
-            x11rb::protocol::Event::ClientMessage(msg),
+            msg,
         )?;
         self.conn
             .set_input_focus(xproto::InputFocus::PARENT, *window, x11rb::CURRENT_TIME)?;
