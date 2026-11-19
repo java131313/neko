@@ -6,6 +6,9 @@ FROM $BASE_IMAGE
 # as the Go-based Dockerfile, but FROM the neko-rs base (no Go server,
 # no neko-webshell stanza in the app conf — the base already runs it).
 # openbox + CJK/emoji fonts already ship in the base image.
+#
+# Toolchain: Zed editor, Go + gopls, Node 24 LTS + npm, bun, and the Pi
+# coding agent CLI (npm global install). Workspace holds the demogit repo.
 RUN set -eux; apt-get update; \
     apt-get install -y --no-install-recommends wget xz-utils git unzip \
         libvulkan1 mesa-vulkan-drivers libxkbcommon0 libasound2t64 golang-go; \
@@ -13,8 +16,8 @@ RUN set -eux; apt-get update; \
     # Zed, matching the image architecture
     ARCH=$(dpkg --print-architecture); \
     case "${ARCH}" in \
-        amd64) ZED_ARCH="x86_64"; BUN_ARCH="x64" ;; \
-        arm64) ZED_ARCH="aarch64"; BUN_ARCH="aarch64" ;; \
+        amd64) ZED_ARCH="x86_64"; BUN_ARCH="x64"; NODE_ARCH="x64" ;; \
+        arm64) ZED_ARCH="aarch64"; BUN_ARCH="aarch64"; NODE_ARCH="arm64" ;; \
         *) echo "unsupported arch: ${ARCH}" >&2; exit 1 ;; \
     esac; \
     wget -O /tmp/zed.tar.gz "https://github.com/zed-industries/zed/releases/latest/download/zed-linux-${ZED_ARCH}.tar.gz"; \
@@ -26,16 +29,26 @@ RUN set -eux; apt-get update; \
     # Go toolchain + gopls (Zed's Go extension picks gopls from PATH)
     GOPROXY=https://goproxy.cn,direct GOBIN=/usr/local/bin go install golang.org/x/tools/gopls@latest; \
     #
-    # bun runtime (pi-mono is a bun/TypeScript monorepo)
+    # bun runtime
     wget -O /tmp/bun.zip "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-${BUN_ARCH}.zip"; \
     unzip -q /tmp/bun.zip -d /tmp; \
     install -m 0755 "/tmp/bun-linux-${BUN_ARCH}/bun" /usr/local/bin/bun; \
     rm -rf /tmp/bun.zip "/tmp/bun-linux-${BUN_ARCH}"; \
     #
-    # pi-mono (Pi agent harness) source in the workspace, ready to hack on from Zed
-    git clone --depth 1 https://github.com/badlogic/pi-mono.git /home/neko/workspace/pi-mono; \
-    cd /home/neko/workspace/pi-mono; \
-    bun install; \
+    # Node 24 LTS (Debian trixie's nodejs is too old: pi requires >=22.19)
+    NODE_TARBALL=$(wget -qO- https://nodejs.org/dist/latest-v24.x/ | grep -oE "node-v[0-9.]+-linux-${NODE_ARCH}\.tar\.xz" | head -1); \
+    wget -O /tmp/node.tar.xz "https://nodejs.org/dist/latest-v24.x/${NODE_TARBALL}"; \
+    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1; \
+    rm -f /tmp/node.tar.xz; \
+    node --version; \
+    npm --version; \
+    #
+    # Pi coding agent CLI (global npm install -> /usr/local/bin/pi)
+    npm install -g @earendil-works/pi-coding-agent; \
+    command -v pi; \
+    #
+    # workspace: demogit repo
+    git clone --depth 1 https://github.com/java131313/demogit.git /home/neko/workspace/demogit; \
     #
     # default project directory
     mkdir -p /home/neko/workspace; \
