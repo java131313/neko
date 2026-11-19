@@ -17,9 +17,17 @@
 #   docker run -d --name neko-rs --shm-size=2g \
 #     -p 8080:8080 -p 7681:7681 -p 53000-53100:53000-53100/udp \
 #     --sysctl "net.ipv4.ip_local_port_range=53000 53100" \
+#     -e NEKO_WEBRTC_NAT1TO1=<client-reachable IP> \
 #     -e NEKO_MEMBER_MULTIUSER_USER_PASSWORD=neko \
 #     -e NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD=admin \
 #     ghcr.io/java131313/neko-rs:test
+#
+# NEKO_WEBRTC_NAT1TO1 rewrites host-candidate IPs (webrtc-rs binds only
+# container IPs, which are unreachable across -p port publishing; unlike
+# the Go server it does not auto-detect the external address). Without it
+# ICE stays in "checking" forever and the video never renders. Examples:
+# docker run on the same machine -> 127.0.0.1; LAN/VPS -> the host IP
+# clients connect to (published UDP ports must cover the pinned range).
 #
 # (sysctl value must be SPACE-separated — the kernel rejects "53000-53100"
 # with EINVAL; and Docker Desktop may refuse net.* sysctls altogether —
