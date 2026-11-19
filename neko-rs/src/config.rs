@@ -97,6 +97,16 @@ pub struct Desktop {
     pub screen_width: u32,
     pub screen_height: u32,
     pub screen_rate: u32,
+    /// NEKO_DESKTOP_APPS — "id:ClassMatch[|altMatch],..." (case-insensitive
+    /// WM_CLASS substring match); the apptab switcher raises the matching
+    /// window. Defaults: zed + chromium.
+    pub apps: Vec<AppTab>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AppTab {
+    pub id: String,
+    pub class_matches: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -234,6 +244,40 @@ impl Config {
                 screen_width: env_u32("NEKO_DESKTOP_SCREEN_WIDTH", 1920),
                 screen_height: env_u32("NEKO_DESKTOP_SCREEN_HEIGHT", 1080),
                 screen_rate: env_u32("NEKO_DESKTOP_SCREEN_RATE", 30),
+                apps: env("NEKO_DESKTOP_APPS")
+                    .map(|v| {
+                        v.split(',')
+                            .filter_map(|entry| {
+                                let (id, matches) = entry.split_once(':')?;
+                                let class_matches: Vec<String> = matches
+                                    .split('|')
+                                    .map(|s| s.trim().to_owned())
+                                    .filter(|s| !s.is_empty())
+                                    .collect();
+                                if id.trim().is_empty() || class_matches.is_empty() {
+                                    None
+                                } else {
+                                    Some(AppTab {
+                                        id: id.trim().to_owned(),
+                                        class_matches,
+                                    })
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .filter(|apps: &Vec<AppTab>| !apps.is_empty())
+                    .unwrap_or_else(|| {
+                        vec![
+                            AppTab {
+                                id: "zed".to_owned(),
+                                class_matches: vec!["zed".to_owned()],
+                            },
+                            AppTab {
+                                id: "chromium".to_owned(),
+                                class_matches: vec!["chromium".to_owned()],
+                            },
+                        ]
+                    }),
             },
             room: RoomDefaults {
                 private_mode: env_bool("NEKO_ROOM_PRIVATE_MODE", false),

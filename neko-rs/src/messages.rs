@@ -288,6 +288,8 @@ pub mod client_events {
     pub const SIGNAL_OFFER: &str = "signal/offer";
     pub const SIGNAL_ANSWER: &str = "signal/answer";
     pub const SIGNAL_CANDIDATE: &str = "signal/candidate";
+    /// raise one of the desktop.apps windows to the front (apptab switcher)
+    pub const CONTROL_APPTAB: &str = "control/apptab";
 }
 
 /// Known server -> client event names.
@@ -314,6 +316,8 @@ pub mod server_events {
     pub const SIGNAL_ANSWER: &str = "signal/answer";
     pub const SIGNAL_CANDIDATE: &str = "signal/candidate";
     pub const SIGNAL_CLOSE: &str = "signal/close";
+    /// the raised app changed (apptab); payload {app, apps}
+    pub const APPTAB: &str = "apptab";
 }
 
 /// Serialize an outgoing event into the wire envelope.

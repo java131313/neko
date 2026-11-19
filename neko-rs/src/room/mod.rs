@@ -33,6 +33,8 @@ pub struct Inner {
     pub host: RwLock<Option<String>>,
     pub settings: RwLock<Settings>,
     pub screen_size: RwLock<ScreenSize>,
+    /// the app the apptab switcher last raised (id from desktop.apps)
+    pub active_app: RwLock<String>,
     /// room-wide events (session/created, control/host, clipboard, ...)
     pub bus: broadcast::Sender<Envelope>,
     /// webrtc peer manager (phase C)
@@ -81,6 +83,12 @@ impl State {
             rate: config.desktop.screen_rate,
         };
         let (bus, _) = broadcast::channel(BUS_CAP);
+        let active_app = config
+            .desktop
+            .apps
+            .first()
+            .map(|a| a.id.clone())
+            .unwrap_or_default();
         let webrtc = crate::webrtc::Manager::new(config.clone(), webrtc_events);
         let desktop = match crate::desktop::Desktop::new(&config.capture.display) {
             Ok(desktop) => {
@@ -100,6 +108,7 @@ impl State {
                 host: RwLock::new(None),
                 settings: RwLock::new(settings),
                 screen_size: RwLock::new(screen_size),
+                active_app: RwLock::new(active_app),
                 bus,
                 webrtc,
                 desktop,
@@ -379,6 +388,58 @@ impl State {
             None => false,
         }
     }
+
+    // ---- apptab: raise one of the desktop.apps windows, all clients follow ----
+
+    fn app_ids(&self) -> Vec<String> {
+        self.inner
+            .config
+            .desktop
+            .apps
+            .iter()
+            .map(|a| a.id.clone())
+            .collect()
+    }
+
+    pub async fn apptab_payload(&self) -> serde_json::Value {
+        serde_json::json!({
+            "app": self.inner.active_app.read().await.clone(),
+            "apps": self.app_ids(),
+        })
+    }
+
+    pub async fn set_active_app(&self, session_id: &str, app_id: &str) {
+        let Some(app) = self
+            .inner
+            .config
+            .desktop
+            .apps
+            .iter()
+            .find(|a| a.id == app_id)
+        else {
+            return;
+        };
+        let Some(desktop) = &self.inner.desktop else {
+            warn!(%session_id, "apptab: desktop unavailable");
+            return;
+        };
+        let raised = desktop
+            .lock()
+            .await
+            .activate_window(&app.class_matches)
+            .unwrap_or(false);
+        if !raised {
+            warn!(%session_id, app = %app_id, "apptab: no matching window (see debug log for WM_CLASS list)");
+            return;
+        }
+        *self.inner.active_app.write().await = app.id.clone();
+        info!(%session_id, app = %app.id, "apptab raised");
+        self.broadcast(&Envelope {
+            event: messages::server_events::APPTAB.to_owned(),
+            payload: serde_json::json!({ "app": app.id, "apps": self.app_ids() }),
+        });
+    }
+
 
     pub async fn sessions_snapshot(&self) -> HashMap<String, Session> {
         self.inner

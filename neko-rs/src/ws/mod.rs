@@ -74,6 +74,16 @@ pub async fn handle(socket: WebSocket, state: State, token: Option<String>) {
             },
         )
         .await;
+    // apptab switcher state, like chat/init: current app + the available list
+    state
+        .send_to(
+            &session_id,
+            &Envelope {
+                event: messages::server_events::APPTAB.to_owned(),
+                payload: state.apptab_payload().await,
+            },
+        )
+        .await;
 
     let heartbeat_secs = state
         .settings()
@@ -199,6 +209,10 @@ async fn dispatch(state: &State, session_id: &str, env: Envelope) {
         }
         ev::CONTROL_PASTE => {
             state.input_paste(session_id).await;
+        }
+        ev::CONTROL_APPTAB => {
+            let Some(app) = env.payload["app"].as_str() else { return };
+            state.set_active_app(session_id, app).await;
         }
         ev::CLIPBOARD_SET => {
             let Some(text) = env.payload["text"].as_str() else { return };

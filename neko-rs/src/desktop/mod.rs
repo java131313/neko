@@ -105,6 +105,96 @@ impl Desktop {
         Ok((reply.root_x as i32, reply.root_y as i32))
     }
 
+    /// Top-level windows (_NET_CLIENT_LIST) with their WM_CLASS, for the
+    /// apptab switcher and its diagnostics.
+    pub fn list_windows(&self) -> Result<Vec<(xproto::Window, String)>> {
+        let net_client_list = self.intern_atom("_NET_CLIENT_LIST")?;
+        let reply = self
+            .conn
+            .get_property(false, self.root, net_client_list, xproto::AtomEnum::ANY, 0, 4096)?
+            .reply()
+            .context("get _NET_CLIENT_LIST")?;
+        let mut out = Vec::new();
+        if reply.format == 32 {
+            for chunk in reply.value.chunks_exact(4) {
+                let window = u32::from_ne_bytes(chunk.try_into().unwrap()).into();
+                let class = self.window_class(window).unwrap_or_default();
+                out.push((window, class));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Raise + focus the topmost window whose WM_CLASS contains one of the
+    /// given matches (case-insensitive). EWMH: map if needed, stack Above,
+    /// _NET_ACTIVE_WINDOW from a "pager", set input focus. false = no match.
+    pub fn activate_window(&self, class_matches: &[String]) -> Result<bool> {
+        let wanted: Vec<String> = class_matches.iter().map(|s| s.to_lowercase()).collect();
+        let windows = self.list_windows()?;
+        // newest last in _NET_CLIENT_LIST; a later match wins
+        let target = windows.iter().rev().find(|(_, class)| {
+            let class = class.to_lowercase();
+            wanted.iter().any(|w| !w.is_empty() && class.contains(w.as_str()))
+        });
+        let Some((window, _)) = target else {
+            debug!(?windows, "activate_window: no WM_CLASS match");
+            return Ok(false);
+        };
+
+        if let Ok(attrs) = self.conn.get_window_attributes(*window)?.reply() {
+            if attrs.map_state != xproto::MapState::VIEWABLE {
+                self.conn.map_window(*window)?;
+            }
+        }
+        self.conn.configure_window(
+            *window,
+            &xproto::ConfigureWindowAux::new().stack_mode(xproto::StackMode::ABOVE),
+        )?;
+        let net_active_window = self.intern_atom("_NET_ACTIVE_WINDOW")?;
+        let msg = xproto::ClientMessageEvent::new(
+            32,
+            self.root,
+            net_active_window,
+            xproto::ClientMessageData::from([*window, 2, x11rb::CURRENT_TIME, 0, 0]),
+        );
+        self.conn.send_event(
+            false,
+            self.root,
+            xproto::EventMask::SUBSTRUCTURE_REDIRECT | xproto::EventMask::SUBSTRUCTURE_NOTIFY,
+            xproto::Event::ClientMessage(msg),
+        )?;
+        self.conn
+            .set_input_focus(xproto::InputFocus::PARENT, *window, x11rb::CURRENT_TIME)?;
+        self.conn.flush().context("flush activate_window")?;
+        Ok(true)
+    }
+
+    fn window_class(&self, window: xproto::Window) -> Result<String> {
+        let wm_class = self.conn.intern_atom(false, b"WM_CLASS")?.reply()?.atom;
+        let reply = self
+            .conn
+            .get_property(false, window, wm_class, xproto::AtomEnum::STRING, 0, 64)?
+            .reply()
+            .context("get WM_CLASS")?;
+        // WM_CLASS = "instance\0class\0"; the class is what EWMH matches on
+        let value = &reply.value;
+        let nul = value.iter().position(|b| *b == 0).unwrap_or(value.len());
+        let class = value
+            .get(nul + 1..)
+            .and_then(|rest| rest.iter().position(|b| *b == 0).map(|end| &rest[..end]))
+            .unwrap_or(&[]);
+        Ok(String::from_utf8_lossy(class).into_owned())
+    }
+
+    fn intern_atom(&self, name: &str) -> Result<xproto::Atom> {
+        Ok(self
+            .conn
+            .intern_atom(false, name.as_bytes())?
+            .reply()
+            .context("intern atom")?
+            .atom)
+    }
+
     /// Write text to the X CLIPBOARD selection. xclip (shipped in the
     /// image) forks and serves the selection until replaced; a later
     /// native xfixes implementation can replace this.
