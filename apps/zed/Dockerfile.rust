@@ -7,10 +7,11 @@ FROM $BASE_IMAGE
 # no neko-webshell stanza in the app conf — the base already runs it).
 # openbox + CJK/emoji fonts already ship in the base image.
 #
-# Toolchain: Zed editor, Go + gopls, Node 24 LTS + npm, bun, and the Pi
-# coding agent CLI (npm global install). Workspace holds the demogit repo.
+# Toolchain: Zed editor, Go + gopls, Node 24 LTS + npm, bun, curl + gh
+# (GitHub CLI), and the Pi coding agent CLI (npm global install).
+# Workspace holds the demogit repo.
 RUN set -eux; apt-get update; \
-    apt-get install -y --no-install-recommends wget xz-utils git unzip \
+    apt-get install -y --no-install-recommends wget curl xz-utils git unzip gh \
         libvulkan1 mesa-vulkan-drivers libxkbcommon0 libasound2t64 golang-go; \
     #
     # Zed, matching the image architecture
