@@ -82,3 +82,9 @@ COPY openbox.xml /etc/neko/openbox.xml
 # vlc's default media location (a bare UI when empty, like the vlc app)
 ENV VLC_MEDIA="/media"
 RUN mkdir -p /media && chown neko:neko /media
+
+# capture the apps' audio: pulse's DEFAULT source is the virtual "microphone"
+# (audio_input.monitor, browser->container mic), so without this pin pulsesrc
+# streams the mic — silence. The Go server resolves an empty device to this
+# monitor; neko-rs passes the empty string through (fix pending there).
+ENV NEKO_CAPTURE_AUDIO_DEVICE=audio_output.monitor
