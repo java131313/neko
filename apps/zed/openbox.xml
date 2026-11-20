@@ -33,6 +33,13 @@
       <focus>yes</focus>
       <layer>normal</layer>
     </application>
+    <!-- Tor Browser is firefox-based: class Tor*, window name Navigator -->
+    <application class="Tor*" name="Navigator">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+      <layer>normal</layer>
+    </application>
 </applications>
 
 <focus>

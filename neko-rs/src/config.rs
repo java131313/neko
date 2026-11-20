@@ -280,6 +280,10 @@ impl Config {
                                 id: "vlc".to_owned(),
                                 class_matches: vec!["vlc".to_owned()],
                             },
+                            AppTab {
+                                id: "tor-browser".to_owned(),
+                                class_matches: vec!["tor browser".to_owned(), "navigator".to_owned()],
+                            },
                         ]
                     }),
             },

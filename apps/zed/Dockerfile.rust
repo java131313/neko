@@ -13,7 +13,7 @@ FROM $BASE_IMAGE
 RUN set -eux; apt-get update; \
     apt-get install -y --no-install-recommends wget curl xz-utils git unzip gh \
         libvulkan1 mesa-vulkan-drivers libxkbcommon0 libasound2t64 golang-go \
-        chromium vlc; \
+        chromium vlc libdbus-glib-1-2; \
     #
     # Zed, matching the image architecture
     ARCH=$(dpkg --print-architecture); \
@@ -51,6 +51,20 @@ RUN set -eux; apt-get update; \
     #
     # workspace: demogit repo
     git clone --depth 1 https://github.com/java131313/demogit.git /home/neko/workspace/demogit; \
+    #
+    # Tor Browser: official per-arch tarball (torproject update API),
+    # like the tor-browser app; the dir must belong to the runtime user
+    case "${ARCH}" in \
+        amd64) TOR_JSON="https://aus1.torproject.org/torbrowser/update_3/release/download-linux-x86_64.json" ;; \
+        arm64) TOR_JSON="https://aus1.torproject.org/torbrowser/update_3/release/download-linux-aarch64.json" ;; \
+        *) echo "unsupported arch: ${ARCH}" >&2; exit 1 ;; \
+    esac; \
+    TOR_URI=$(curl -s -N "$TOR_JSON" | grep -Po '"binary"\s*:\s*"\K[^"]+'); \
+    curl -sSL -o /tmp/tor.tar.xz "$TOR_URI"; \
+    tar -xJf /tmp/tor.tar.xz -C /opt; \
+    mv /opt/tor-browser* /opt/tor-browser_en-US; \
+    chown -R neko:neko /opt/tor-browser_en-US; \
+    rm -f /tmp/tor.tar.xz; \
     #
     # default project directory
     mkdir -p /home/neko/workspace; \
