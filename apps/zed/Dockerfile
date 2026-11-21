@@ -119,6 +119,10 @@ USER root
 # vlc's default media location (a bare UI when empty, like the vlc app)
 ENV VLC_MEDIA="/media"
 
+# apptab switcher: the front-end tabs and the WM_CLASS match per app
+# (raises the window server-side; A-Tab in openbox works too)
+ENV NEKO_DESKTOP_APPS="zed:zed,vscode:code,google-chrome:google-chrome,brave:brave-browser,tor-browser:tor browser|navigator,vlc:vlc"
+
 #
 # copy configuation files
 COPY supervisord.conf /etc/neko/supervisord/zed.conf

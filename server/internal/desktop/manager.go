@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,6 +28,36 @@ const (
 
 var mu = sync.Mutex{}
 
+// one app of the apptab switcher: raise the window whose WM_CLASS contains
+// one of the case-insensitive Matches substrings
+type Apptab struct {
+	Id      string
+	Matches []string
+}
+
+// "id:m1[|m2],..." → tabs; empty/invalid entries skipped
+func parseApptabs(raw string) []Apptab {
+	var out []Apptab
+	for _, entry := range strings.Split(raw, ",") {
+		id, matches, ok := strings.Cut(entry, ":")
+		if !ok {
+			continue
+		}
+		var ms []string
+		for _, m := range strings.Split(matches, "|") {
+			if m = strings.TrimSpace(m); m != "" {
+				ms = append(ms, m)
+			}
+		}
+		id = strings.TrimSpace(id)
+		if id == "" || len(ms) == 0 {
+			continue
+		}
+		out = append(out, Apptab{Id: id, Matches: ms})
+	}
+	return out
+}
+
 type DesktopManagerCtx struct {
 	logger     zerolog.Logger
 	wg         sync.WaitGroup
@@ -40,6 +71,10 @@ type DesktopManagerCtx struct {
 	// It must remain running to allow pasting clipboard data.
 	// The last command is kept running until it is replaced or shutdown.
 	clipboardCommand atomic.Pointer[exec.Cmd]
+
+	// apptab switcher: the configured apps and the last raised one
+	apptabs      []Apptab
+	activeApptab string
 }
 
 func New(config *config.Desktop) *DesktopManagerCtx {
@@ -50,13 +85,21 @@ func New(config *config.Desktop) *DesktopManagerCtx {
 		input = xinput.NewDummy()
 	}
 
+	apptabs := parseApptabs(config.Apps)
+	activeApptab := ""
+	if len(apptabs) > 0 {
+		activeApptab = apptabs[0].Id
+	}
+
 	return &DesktopManagerCtx{
-		logger:     log.With().Str("module", "desktop").Logger(),
-		shutdown:   make(chan struct{}),
-		emmiter:    events.New(),
-		config:     config,
-		screenSize: config.ScreenSize,
-		input:      input,
+		logger:       log.With().Str("module", "desktop").Logger(),
+		shutdown:     make(chan struct{}),
+		emmiter:      events.New(),
+		config:       config,
+		screenSize:   config.ScreenSize,
+		input:        input,
+		apptabs:      parseApptabs(config.Apps),
+		activeApptab: activeApptab,
 	}
 }
 
@@ -146,4 +189,43 @@ func (manager *DesktopManagerCtx) Shutdown() error {
 
 	xorg.DisplayClose()
 	return nil
+}
+
+func (manager *DesktopManagerCtx) Apptabs() (string, []string) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	apps := make([]string, 0, len(manager.apptabs))
+	for _, tab := range manager.apptabs {
+		apps = append(apps, tab.Id)
+	}
+	return manager.activeApptab, apps
+}
+
+func (manager *DesktopManagerCtx) ActivateApptab(id string) bool {
+	mu.Lock()
+	var target *Apptab
+	for i := range manager.apptabs {
+		if manager.apptabs[i].Id == id {
+			target = &manager.apptabs[i]
+			break
+		}
+	}
+	mu.Unlock()
+
+	if target == nil {
+		return false
+	}
+
+	// the C side mutates the buffer (strtok_r): join fresh per call
+	if !xorg.ApptabActivate(strings.Join(target.Matches, "|")) {
+		return false
+	}
+
+	mu.Lock()
+	manager.activeApptab = id
+	mu.Unlock()
+
+	manager.logger.Info().Str("app", id).Msg("apptab raised")
+	return true
 }

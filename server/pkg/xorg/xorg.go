@@ -349,3 +349,15 @@ func goCreateScreenSize(index C.int, width C.int, height C.int, mwidth C.int, mh
 func goSetScreenRates(index C.int, rate_index C.int, rateC C.short) {
 	ScreenConfigurations[int(index)].Rates[int(rate_index)] = int16(rateC)
 }
+
+// ApptabActivate raises + focuses the window whose WM_CLASS contains one of
+// the '|'-separated, case-insensitive substrings. False = no match.
+func ApptabActivate(matches string) bool {
+	mu.Lock()
+	defer mu.Unlock()
+
+	matchesUnsafe := C.CString(matches)
+	defer C.free(unsafe.Pointer(matchesUnsafe))
+
+	return bool(C.XApptabActivate(matchesUnsafe))
+}

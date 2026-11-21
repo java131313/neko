@@ -72,6 +72,10 @@ type DesktopManager interface {
 	GetCursorImage() *CursorImage
 	GetScreenshotImage() *image.RGBA
 
+	// apptab switcher (empty apps list = feature off)
+	ActivateApptab(id string) bool
+	Apptabs() (active string, apps []string)
+
 	// xevent
 	OnCursorChanged(listener func(serial uint64))
 	OnClipboardUpdated(listener func())

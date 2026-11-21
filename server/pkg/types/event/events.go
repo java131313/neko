@@ -7,6 +7,8 @@ const (
 	SYSTEM_LOGS       = "system/logs"
 	SYSTEM_DISCONNECT = "system/disconnect"
 	SYSTEM_HEARTBEAT  = "system/heartbeat"
+	// the raised desktop app changed (apptab); payload message.Apptab
+	APPTAB = "apptab"
 )
 
 const (
@@ -56,6 +58,8 @@ const (
 	CONTROL_COPY       = "control/copy"
 	CONTROL_PASTE      = "control/paste"
 	CONTROL_SELECT_ALL = "control/select_all"
+	// raise one of the configured desktop apps' windows (apptab switcher)
+	CONTROL_APPTAB = "control/apptab"
 )
 
 const (

@@ -33,6 +33,14 @@ func (h *MessageHandlerCtx) SessionConnected(session types.Session) error {
 		return err
 	}
 
+	// apptab switcher state, like the chat plugin's init: current app + list
+	if active, apps := h.desktop.Apptabs(); len(apps) > 0 {
+		session.Send(event.APPTAB, message.Apptab{
+			App:  active,
+			Apps: apps,
+		})
+	}
+
 	if session.Profile().IsAdmin {
 		if err := h.systemAdmin(session); err != nil {
 			return err

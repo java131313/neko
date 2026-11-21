@@ -1,6 +1,7 @@
 #pragma once
 
 #include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #include <X11/XKBlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/Xrandr.h>
@@ -10,6 +11,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 
 // for computing xrandr modelines at runtime
 #include <libxcvt/libxcvt.h>
@@ -38,6 +40,11 @@ static KeyCode XkbKeysymToKeycode(Display *dpy, KeySym keysym);
 void XKey(KeySym keysym, int down);
 
 Status XSetScreenConfiguration(int width, int height, short rate);
+
+// apptab: raise + focus the window whose WM_CLASS contains one of the
+// '|'-separated, case-insensitive substrings. Returns 1 when a window
+// matched (mutates `matches` — strtok_r).
+int XApptabActivate(char *matches);
 void XGetScreenConfiguration(int *width, int *height, short *rate);
 void XGetScreenConfigurations();
 void XCreateScreenMode(int width, int height, short rate);

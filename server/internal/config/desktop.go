@@ -23,6 +23,9 @@ type Desktop struct {
 	Unminimize        bool
 	UploadDrop        bool
 	FileChooserDialog bool
+
+	// "id:ClassMatch[|altMatch],..." — apptab switcher; empty = off
+	Apps string
 }
 
 func (Desktop) Init(cmd *cobra.Command) error {
@@ -58,6 +61,11 @@ func (Desktop) Init(cmd *cobra.Command) error {
 
 	cmd.PersistentFlags().Bool("desktop.file_chooser_dialog", false, "whether to handle file chooser dialog externally")
 	if err := viper.BindPFlag("desktop.file_chooser_dialog", cmd.PersistentFlags().Lookup("desktop.file_chooser_dialog")); err != nil {
+		return err
+	}
+
+	cmd.PersistentFlags().String("desktop.apps", "", "apptab switcher: id:ClassMatch[|alt],... (empty = off)")
+	if err := viper.BindPFlag("desktop.apps", cmd.PersistentFlags().Lookup("desktop.apps")); err != nil {
 		return err
 	}
 
@@ -107,6 +115,7 @@ func (s *Desktop) Set() {
 	s.Unminimize = viper.GetBool("desktop.unminimize")
 	s.UploadDrop = viper.GetBool("desktop.upload_drop")
 	s.FileChooserDialog = viper.GetBool("desktop.file_chooser_dialog")
+	s.Apps = viper.GetString("desktop.apps")
 }
 
 func (s *Desktop) SetV2() {

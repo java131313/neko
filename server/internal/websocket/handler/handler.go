@@ -152,6 +152,11 @@ func (h *MessageHandlerCtx) Message(session types.Session, data types.WebSocketM
 		err = utils.Unmarshal(payload, data.Payload, func() error {
 			return h.controlPaste(session, payload)
 		})
+	case event.CONTROL_APPTAB:
+		payload := &message.ControlApptab{}
+		err = utils.Unmarshal(payload, data.Payload, func() error {
+			return h.controlApptab(session, payload)
+		})
 	case event.CONTROL_SELECT_ALL:
 		err = h.controlSelectAll(session)
 

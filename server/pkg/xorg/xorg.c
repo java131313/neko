@@ -457,3 +457,96 @@ char *XGetScreenshot(int *w, int *h) {
   XDestroyImage(ximage);
   return pixels;
 }
+
+// case-insensitive substring (needle in haystack), no locale dependence
+static int ciContains(const char *hay, const char *needle) {
+  size_t nl = strlen(needle);
+  if (nl == 0)
+    return 1;
+  for (; *hay; hay++) {
+    size_t i = 0;
+    while (i < nl && hay[i] &&
+           tolower((unsigned char)hay[i]) == tolower((unsigned char)needle[i]))
+      i++;
+    if (i == nl)
+      return 1;
+  }
+  return 0;
+}
+
+int XApptabActivate(char *matches) {
+  if (DISPLAY == NULL)
+    return 0;
+
+  Display *dpy = DISPLAY;
+  Window root = DefaultRootWindow(dpy);
+  Atom netClientList = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+  Atom netActiveWindow = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+
+  Atom actual;
+  int format;
+  unsigned long count, bytes;
+  unsigned char *prop = NULL;
+  if (XGetWindowProperty(dpy, root, netClientList, 0, ~0L, False, XA_WINDOW,
+                         &actual, &format, &count, &bytes, &prop) != Success ||
+      prop == NULL)
+    return 0;
+
+  Window *wins = (Window *)prop;
+  Window target = 0;
+  // _NET_CLIENT_LIST is oldest-first: scan backwards so the newest match wins
+  for (long i = (long)count - 1; i >= 0; i--) {
+    XClassHint hint;
+    if (!XGetClassHint(dpy, wins[i], &hint))
+      continue;
+
+    const char *hay = hint.res_class ? hint.res_class : hint.res_name;
+    int hit = 0;
+    if (hay != NULL) {
+      char *save = NULL;
+      for (char *tok = strtok_r(matches, "|", &save); tok; tok = strtok_r(NULL, "|", &save)) {
+        if (ciContains(hay, tok)) {
+          hit = 1;
+          break;
+        }
+      }
+    }
+
+    if (hint.res_name)
+      XFree(hint.res_name);
+    if (hint.res_class)
+      XFree(hint.res_class);
+
+    if (hit) {
+      target = wins[i];
+      break;
+    }
+  }
+  XFree(prop);
+
+  if (target == 0)
+    return 0;
+
+  XWindowAttributes attrs;
+  if (XGetWindowAttributes(dpy, target, &attrs) && attrs.map_state != IsViewable)
+    XMapWindow(dpy, target);
+  XRaiseWindow(dpy, target);
+
+  // EWMH activation: pager-originated _NET_ACTIVE_WINDOW on the root
+  XEvent xev;
+  memset(&xev, 0, sizeof(xev));
+  xev.xclient.type = ClientMessage;
+  xev.xclient.send_event = True;
+  xev.xclient.display = dpy;
+  xev.xclient.window = target;
+  xev.xclient.message_type = netActiveWindow;
+  xev.xclient.format = 32;
+  xev.xclient.data.l[0] = 2; // source indication: pager
+  xev.xclient.data.l[1] = CurrentTime;
+  XSendEvent(dpy, root, False,
+             SubstructureRedirectMask | SubstructureNotifyMask, &xev);
+
+  XSetInputFocus(dpy, target, RevertToParent, CurrentTime);
+  XFlush(dpy);
+  return 1;
+}

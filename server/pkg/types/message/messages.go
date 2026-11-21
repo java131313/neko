@@ -152,6 +152,17 @@ type ControlTouch struct {
 	Pressure uint8  `json:"pressure"`
 }
 
+// apptab switcher: raise the window of the named desktop app
+type ControlApptab struct {
+	App string `json:"app"`
+}
+
+// the raised app changed (or the state after connect)
+type Apptab struct {
+	App  string   `json:"app"`
+	Apps []string `json:"apps"`
+}
+
 /////////////////////////////
 // Screen
 /////////////////////////////
