@@ -359,5 +359,5 @@ func ApptabActivate(matches string) bool {
 	matchesUnsafe := C.CString(matches)
 	defer C.free(unsafe.Pointer(matchesUnsafe))
 
-	return bool(C.XApptabActivate(matchesUnsafe))
+	return int(C.XApptabActivate(matchesUnsafe)) == 1
 }
