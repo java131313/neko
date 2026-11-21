@@ -71,9 +71,7 @@ function Panel({ tabs }: { tabs: PluginTab[] }) {
   }
   const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return
-    const w = Math.round(
-      Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, drag.current.w + (drag.current.x - e.clientX))),
-    )
+    const w = Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, drag.current.w + (drag.current.x - e.clientX))))
     setWidth(w)
     remember('side.width', w)
   }

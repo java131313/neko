@@ -12,10 +12,7 @@ export function AppTabs() {
   if (!connected || apps.length < 2) return null
 
   return (
-    <div
-      className="absolute left-2 top-2 z-20 flex gap-0.5 rounded-[3px] bg-black/40 p-0.5"
-      data-testid="app-tabs"
-    >
+    <div className="absolute left-2 top-2 z-20 flex gap-0.5 rounded-[3px] bg-black/40 p-0.5" data-testid="app-tabs">
       {apps.map((id) => (
         <button
           key={id}
