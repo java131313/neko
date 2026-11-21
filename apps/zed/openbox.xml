@@ -12,16 +12,33 @@
 </resistance>
 
 <applications>
-    <!-- Match all windows and remove their decorations (obxprop | grep "^_OB_APP") -->
+    <!-- every app in this all-in-one image starts maximized and undecorated;
+      Alt-Tab (A-Tab below) cycles them — match WM_CLASS (obxprop) -->
     <application class="Chromium*" name="chromium*" role="browser">
       <decor>no</decor>
       <maximized>true</maximized>
       <focus>yes</focus>
       <layer>normal</layer>
     </application>
-    <!-- Zed starts windowed; maximize it like the browser so the apptab
-      switcher (which raises the chosen window) covers the screen -->
     <application class="Zed*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+      <layer>normal</layer>
+    </application>
+    <application class="Code">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+      <layer>normal</layer>
+    </application>
+    <application class="Google-chrome*">
+      <decor>no</decor>
+      <maximized>true</maximized>
+      <focus>yes</focus>
+      <layer>normal</layer>
+    </application>
+    <application class="Brave-browser*">
       <decor>no</decor>
       <maximized>true</maximized>
       <focus>yes</focus>
