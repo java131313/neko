@@ -6,7 +6,7 @@ FROM $BASE_IMAGE
 # 两个应用共享一个 X 桌面,apptab 前端 tab 切换(NEKO_DESKTOP_APPS),
 # Alt-Tab(openbox A-Tab)同样可用。配方照搬单应用镜像。
 RUN set -eux; apt-get update; \
-    apt-get install -y --no-install-recommends wget curl apt-transport-https \
+    apt-get install -y --no-install-recommends openbox wget curl apt-transport-https \
         libasound2t64 fonts-noto-color-emoji golang-go; \
     #
     # Go toolchain + gopls (VS Code's Go extension picks gopls from PATH)
