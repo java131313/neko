@@ -125,7 +125,7 @@ test('every language has the namespace files, en every key, the others all but t
   const en = Object.fromEntries(NS.map((ns) => [ns, flat(json('en', ns))]))
   assert.equal(
     NS.reduce((n, ns) => n + Object.keys(en[ns]).length, 0),
-    102,
+    104,
   )
   // strings added since the translations: en only, until someone translates them
   const GAPS = [
@@ -135,7 +135,7 @@ test('every language has the namespace files, en every key, the others all but t
     'setting.links_in_app',
     'connection.replaced',
   ]
-  const SHELL_GAP = ['shell.tab', 'shell.disconnected'] // translated in cn; the others fall back to en
+  const SHELL_GAP = ['shell.tab', 'shell.disconnected', 'shell.fullscreen', 'shell.windowed'] // translated in cn; the others fall back to en
   for (const lang of langs) {
     // the shell tab is translated in en and cn; the other languages fall back to en for now
     const translated = lang === 'en' || lang === 'cn'
