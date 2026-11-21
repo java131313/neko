@@ -69,9 +69,10 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends /tmp/code.deb; \
     rm -f /tmp/code.deb; \
-    # the deb leaves Microsoft's apt repo behind, whose signature trixie's
-    # sqv rejects ("not signed") and fails every later `apt-get update`
-    rm -f /etc/apt/sources.list.d/vscode.list; \
+    # the deb leaves Microsoft's apt repo behind (deb822 .sources on trixie,
+    # legacy .list elsewhere), whose signature sqv rejects ("not signed") and
+    # fails every later `apt-get update` — chrome/brave steps die on it
+    rm -f /etc/apt/sources.list.d/vscode.list /etc/apt/sources.list.d/vscode.sources; \
     apt-get clean -y; \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
