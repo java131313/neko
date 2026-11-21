@@ -69,6 +69,9 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends /tmp/code.deb; \
     rm -f /tmp/code.deb; \
+    # the deb leaves Microsoft's apt repo behind, whose signature trixie's
+    # sqv rejects ("not signed") and fails every later `apt-get update`
+    rm -f /etc/apt/sources.list.d/vscode.list; \
     apt-get clean -y; \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
